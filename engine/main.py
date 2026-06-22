@@ -272,26 +272,17 @@ class Vehicle:
         sorted_intervals = sorted(self.timeSchedule, key=lambda x: x.start)
 
         for interval in sorted_intervals:
-            if interval.mission_assignment:
-                # Po zakończeniu interwału – lokalizacja zależy od statusu
-                if target_time >= interval.end:
-                    if interval.status == Status.IN_PROGRESS_ACTIVE:
-                        current_loc = (
-                            interval.mission_assignment.mission.destination.location
-                        )
-                    elif interval.status == Status.UNLOADING:
-                        current_loc = (
-                            interval.mission_assignment.mission.destination.location
-                        )
-                    elif interval.status == Status.IN_PROGRESS_PASSIVE:
-                        current_loc = (
-                            interval.mission_assignment.mission.origin.location
-                        )
-                    # Dla czekania lokalizacja pozostaje bez zmian
-                else:
-                    # W trakcie interwału – lokalizacja początkowa (dla jazdy) lub poprzednia
-                    # Nie zmieniamy current_loc, więc zostaje ostatnia znana przed tym interwałem
-                    pass
+            if interval.mission_assignment and target_time >= interval.end:
+                if interval.status == Status.IN_PROGRESS_ACTIVE:
+                    current_loc = (
+                        interval.mission_assignment.mission.destination.location
+                    )
+                elif interval.status == Status.UNLOADING:
+                    current_loc = (
+                        interval.mission_assignment.mission.destination.location
+                    )
+                elif interval.status == Status.IN_PROGRESS_PASSIVE:
+                    current_loc = interval.mission_assignment.mission.origin.location
         return current_loc
 
     def get_earliest_available_time(self, after: datetime) -> datetime:
@@ -404,10 +395,7 @@ class DailyALNSScheduler:
         weight_factor = vehicle.weight_capacity / w
         volume_factor = vehicle.volume_capacity / v
         factor = min(1.0, weight_factor, volume_factor)
-
-        allocated_weight = w * factor
-        allocated_volume = v * factor
-        return allocated_weight, allocated_volume
+        return w * factor, v * factor
 
     def _try_assign_vehicle_to_mission(
         self,
@@ -431,10 +419,6 @@ class DailyALNSScheduler:
         earliest_start = vehicle.get_earliest_available_time(earliest_start)
 
         origin = origin_override if origin_override else mission.origin
-        current_loc = vehicle.get_location_at_time(earliest_start)
-        dist_to_origin = current_loc.distance(origin.location)
-        approach_duration = self.estimate_mission_duration(dist_to_origin)
-
         single_trip_cost = vehicle.carrier.price_per_km * mission.route_distance
 
         if mission.state == State.CREATED:
@@ -451,7 +435,6 @@ class DailyALNSScheduler:
         base_day_midnight = current_date.replace(
             hour=0, minute=0, second=0, microsecond=0
         )
-
         best_score = -float("inf")
         best_result = None
 
@@ -462,12 +445,17 @@ class DailyALNSScheduler:
             if possible_start >= mission.deadline:
                 break
 
+            # 🔧 Obliczamy dist_to_origin DLA TEGO konkretnego possible_start
+            current_loc = vehicle.get_location_at_time(possible_start)
+            dist_to_origin = current_loc.distance(origin.location)
+            approach_duration = self.estimate_mission_duration(dist_to_origin)
+
+            arrival_at_origin = possible_start + approach_duration
+
             if origin_override:
-                arrival_at_origin = possible_start + approach_duration
                 wh_open = arrival_at_origin - timedelta(seconds=1)
                 wh_close = arrival_at_origin + timedelta(days=1)
             else:
-                arrival_at_origin = possible_start + approach_duration
                 wh_open, wh_close = self._get_warehouse_hours(origin, arrival_at_origin)
 
             loading_start = max(arrival_at_origin, wh_open)
@@ -500,6 +488,7 @@ class DailyALNSScheduler:
             if alloc_w <= 0 or alloc_v <= 0:
                 continue
 
+            # Opóźnianie wyjazdu (tylko dla stałego magazynu)
             if not origin_override:
                 if arrival_at_origin >= wh_open:
                     ideal_start = wh_dest_open - approach_duration - transit_duration
@@ -695,7 +684,7 @@ class DailyALNSScheduler:
             next_date = current_date + timedelta(days=1)
             self._clean_expired_temp_warehouses(current_date)
 
-            # Kursy z tymczasowych magazynów
+            # 1. Kursy z tymczasowych magazynów
             for mission in self.unassigned_missions[:]:
                 if mission.stored_in_temp_weight > 0:
                     for tw in self.temp_warehouses:
@@ -747,7 +736,7 @@ class DailyALNSScheduler:
                                         if mission in self.unassigned_missions:
                                             self.unassigned_missions.remove(mission)
 
-            # Standardowe planowanie
+            # 2. Standardowe planowanie
             available_missions = [
                 m
                 for m in self.unassigned_missions
@@ -796,8 +785,7 @@ class DailyALNSScheduler:
                         mission.remaining_volume -= alloc_v
                         mission.cost += trip_cost
 
-                        was_created = mission.state == State.CREATED
-                        if was_created:
+                        if mission.state == State.CREATED:
                             mission.state = State.IN_PROGRESS
                             num_trips = math.ceil(
                                 max(
@@ -950,25 +938,19 @@ def handle_vehicle_breakdown(
     scheduler: DailyALNSScheduler,
     end_date: datetime,
 ):
-    # 1. Znajdź lokalizację awarii (obecna pozycja)
     disruption_loc = vehicle.get_location_at_time(simulation_time)
     temp_wh = None
 
-    # 2. Przerwij wszystkie interwały, które jeszcze trwają lub mają się rozpocząć (end > simulation_time)
-    intervals_to_remove = []
-    for interval in vehicle.timeSchedule:
-        if interval.end > simulation_time:
-            intervals_to_remove.append(interval)
-
+    intervals_to_remove = [
+        iv for iv in vehicle.timeSchedule if iv.end > simulation_time
+    ]
     for interval in intervals_to_remove:
         vehicle.timeSchedule.remove(interval)
         if interval.mission_assignment is None:
-            continue  # czas wolny – ignorujemy
-
+            continue
         assignment = interval.mission_assignment
         mission = assignment.mission
 
-        # 3. Znajdź lub utwórz fantomowy magazyn w miejscu awarii
         if temp_wh is None:
             for tw in scheduler.temp_warehouses:
                 if tw.location.distance(disruption_loc) < 0.001:
@@ -982,7 +964,6 @@ def handle_vehicle_breakdown(
                 )
                 scheduler.temp_warehouses.append(temp_wh)
 
-        # 4. Przenieś ładunek z przerwanego interwału do fantomowego magazynu
         if mission.id not in temp_wh.assignments:
             temp_wh.assignments[mission.id] = (0.0, 0.0)
         w, v = temp_wh.assignments[mission.id]
@@ -991,19 +972,15 @@ def handle_vehicle_breakdown(
             v + assignment.allocated_volume,
         )
 
-        # 5. Zaktualizuj stan misji
         mission.stored_in_temp_weight += assignment.allocated_weight
         mission.stored_in_temp_volume += assignment.allocated_volume
 
-        # Pojazd nie jest już przypisany (jeśli był)
         if vehicle.id in mission.assigned_vehicles:
             mission.assigned_vehicles.remove(vehicle.id)
 
-    # 6. Oznacz pojazd jako zepsuty
     vehicle.is_broken = True
     vehicle.disruption_location = disruption_loc
 
-    # 7. Uruchom ponowne planowanie od czasu awarii
     scheduler._rebuild_unassigned_list()
     scheduler.run_alns(iterations=5, start_date=simulation_time, end_date=end_date)
 
@@ -1038,16 +1015,14 @@ def print_vehicle_working_hours(vehicle: Vehicle):
     for interval in sorted_intervals:
         start_str = interval.start.strftime("%Y-%m-%d %H:%M")
         end_str = interval.end.strftime("%Y-%m-%d %H:%M")
+        icon = status_icons.get(interval.status, "❓")
+        label = status_labels.get(interval.status, str(interval.status))
 
         if interval.mission_assignment is None:
-            icon = status_icons.get(interval.status, "❓")
-            label = status_labels.get(interval.status, str(interval.status))
             print(f" [{start_str} -> {end_str}] {icon} {label}")
         else:
             m_id = interval.mission_assignment.mission.id
             w_val = interval.mission_assignment.allocated_weight
-            icon = status_icons.get(interval.status, "❓")
-            label = status_labels.get(interval.status, str(interval.status))
             cost_info = f" | Koszt: {interval.cost:.2f}zł" if interval.cost > 0 else ""
             print(f" [{start_str} -> {end_str}] {icon} {label}")
             print(f"   Misja: {m_id} | Waga: {w_val:.1f}kg{cost_info}")
@@ -1191,7 +1166,6 @@ if __name__ == "__main__":
         )
         current += timedelta(days=1)
 
-    # Symulacja awarii po pierwszym dniu
     print("\n=== SYMULACJA AWARII ===")
     breakdown_time = start_date + timedelta(hours=5)
     handle_vehicle_breakdown(v1, breakdown_time, scheduler, end_date)
