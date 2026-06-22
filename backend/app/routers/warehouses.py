@@ -4,6 +4,7 @@ List returns only fields useful for filtering/summary (city, region, fill,
 name, ...); the full model is returned by the by-id endpoint.
 """
 from fastapi import APIRouter, Depends, HTTPException
+from geoalchemy2.shape import to_shape
 from sqlalchemy.orm import Session
 
 from app.database import get_db
@@ -14,9 +15,11 @@ router = APIRouter(prefix="/warehouse", tags=["warehouses"])
 
 
 def _summary(w: Warehouse) -> dict:
-    """Lean shape for list/filter views."""
+    """Lean shape for list/filter/map views."""
+    point = to_shape(w.geom)
     return {
         "id": w.id,
+        "carrier_id": w.carrier_id,
         "name": w.name,
         "city": w.city,
         "voivodeship": w.voivodeship,
@@ -24,6 +27,8 @@ def _summary(w: Warehouse) -> dict:
         "cold_storage": w.cold_storage,
         "available_capacity_pct": w.available_capacity_pct,
         "availability_status": w.availability_status,
+        "lat": point.y,
+        "lng": point.x,
     }
 
 
