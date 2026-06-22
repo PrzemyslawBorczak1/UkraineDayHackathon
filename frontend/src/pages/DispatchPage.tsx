@@ -12,7 +12,7 @@ import { RightSidebar } from "../components/sidebar/RightSidebar";
  * Floating overlays live in a `pointer-events-none` layer so the map stays
  * draggable; interactive pills opt back in with `pointer-events-auto`.
  */
-export function DispatchPage() {
+export function DispatchPage({ onNewMission }: { onNewMission: () => void }) {
   return (
     <DispatchShell left={<LeftSidebar />} right={<RightSidebar />}>
       {/* Map fills the stage. */}
@@ -29,7 +29,7 @@ export function DispatchPage() {
 
         {/* Right cluster: stacked actions. */}
         <div className="flex flex-col items-end gap-2 pointer-events-auto">
-          <CtaPill variant="ghost">+ New mission</CtaPill>
+          <CtaPill variant="ghost" onClick={onNewMission}>+ New mission</CtaPill>
           <CtaPill>Summary →</CtaPill>
         </div>
       </div>
