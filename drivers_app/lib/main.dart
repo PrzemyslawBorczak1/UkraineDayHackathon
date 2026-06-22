@@ -17,7 +17,7 @@ void main() {
   SystemChrome.setSystemUIOverlayStyle(const SystemUiOverlayStyle(
     statusBarColor: Colors.transparent,
     statusBarIconBrightness: Brightness.light,
-    systemNavigationBarColor: AppTheme.backgroundDark,
+    systemNavigationBarColor: AppTheme.background,
   ));
 
   runApp(const CrisisLogisticsApp());
@@ -39,7 +39,7 @@ class CrisisLogisticsApp extends StatelessWidget {
     return MaterialApp(
       title: 'Crisis Logistics',
       debugShowCheckedModeBanner: false,
-      theme: AppTheme.darkTheme,
+      theme: AppTheme.dark,
       home: LoginScreen(api: api),
     );
   }

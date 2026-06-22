@@ -7,8 +7,7 @@ import '../widgets/incident_bottom_sheet.dart';
 import '../widgets/mission_card.dart';
 import 'profile_screen.dart';
 
-/// Main screen showing the driver's mission list, profile access, and
-/// incident reporting FAB.
+/// Main missions list screen.
 class MainScreen extends StatefulWidget {
   final ApiService api;
   final String vehicleId;
@@ -32,23 +31,24 @@ class _MainScreenState extends State<MainScreen> {
     _missionsFuture = widget.api.getMissions(widget.vehicleId);
   }
 
-  void _refreshMissions() {
+  void _refresh() {
     setState(() {
       _missionsFuture = widget.api.getMissions(widget.vehicleId);
     });
   }
 
-  void _openIncidentSheet(String currentMissionId) {
+  void _openIncidentSheet(String missionId) {
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
-      backgroundColor: AppTheme.surfaceDark,
+      backgroundColor: AppTheme.surface,
       shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(AppTheme.radiusLg)),
+        borderRadius:
+            BorderRadius.vertical(top: Radius.circular(AppTheme.r12)),
       ),
       builder: (_) => IncidentBottomSheet(
         api: widget.api,
-        currentMissionId: currentMissionId,
+        currentMissionId: missionId,
       ),
     );
   }
@@ -56,18 +56,17 @@ class _MainScreenState extends State<MainScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      // ── AppBar ──────────────────────────────────────────────────────
       appBar: AppBar(
         leading: Padding(
-          padding: const EdgeInsets.only(left: 8),
+          padding: const EdgeInsets.only(left: 12),
           child: IconButton(
-            icon: Container(
-              padding: const EdgeInsets.all(8),
-              decoration: BoxDecoration(
-                color: AppTheme.surfaceLight,
-                borderRadius: BorderRadius.circular(AppTheme.radiusSm),
+            icon: const Icon(Icons.person_rounded, size: 20),
+            style: IconButton.styleFrom(
+              backgroundColor: AppTheme.surfaceAlt,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(AppTheme.r6),
+                side: const BorderSide(color: AppTheme.border),
               ),
-              child: const Icon(Icons.person_rounded, size: 22),
             ),
             onPressed: () {
               Navigator.of(context).push(
@@ -84,43 +83,36 @@ class _MainScreenState extends State<MainScreen> {
         title: const Text('Missions'),
         actions: [
           IconButton(
-            icon: const Icon(Icons.refresh_rounded),
-            tooltip: 'Refresh missions',
-            onPressed: _refreshMissions,
+            icon: const Icon(Icons.refresh_rounded, size: 20),
+            tooltip: 'Refresh',
+            onPressed: _refresh,
           ),
           const SizedBox(width: 8),
         ],
       ),
-
-      // ── Body ────────────────────────────────────────────────────────
       body: FutureBuilder<List<Mission>>(
         future: _missionsFuture,
         builder: (context, snapshot) {
-          // Loading state
           if (snapshot.connectionState == ConnectionState.waiting) {
             return const Center(
               child: CircularProgressIndicator(color: AppTheme.primary),
             );
           }
 
-          // Error state
           if (snapshot.hasError) {
             return Center(
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   const Icon(Icons.cloud_off_rounded,
-                      size: 64, color: AppTheme.textMuted),
-                  const SizedBox(height: 16),
-                  Text(
-                    'Failed to load missions',
-                    style: TextStyle(
-                        fontSize: 18, color: AppTheme.textSecondary),
-                  ),
+                      size: 40, color: AppTheme.textLow),
+                  const SizedBox(height: 12),
+                  const Text('Failed to load missions',
+                      style: TextStyle(color: AppTheme.textMid, fontSize: 14)),
                   const SizedBox(height: 8),
                   TextButton.icon(
-                    onPressed: _refreshMissions,
-                    icon: const Icon(Icons.refresh_rounded),
+                    onPressed: _refresh,
+                    icon: const Icon(Icons.refresh_rounded, size: 16),
                     label: const Text('Retry'),
                   ),
                 ],
@@ -128,51 +120,49 @@ class _MainScreenState extends State<MainScreen> {
             );
           }
 
-          // Data loaded
           final missions = snapshot.data!;
 
           if (missions.isEmpty) {
             return const Center(
               child: Text('No missions assigned',
-                  style: TextStyle(
-                      fontSize: 18, color: AppTheme.textSecondary)),
+                  style: TextStyle(color: AppTheme.textMid, fontSize: 14)),
             );
           }
 
           return RefreshIndicator(
-            onRefresh: () async => _refreshMissions(),
+            onRefresh: () async => _refresh(),
             color: AppTheme.primary,
             child: ListView.builder(
               physics: const AlwaysScrollableScrollPhysics(),
-              padding:
-                  const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+              padding: const EdgeInsets.fromLTRB(16, 8, 16, 80),
               itemCount: missions.length,
-              itemBuilder: (_, index) => MissionCard(mission: missions[index]),
+              itemBuilder: (_, i) => MissionCard(mission: missions[i]),
             ),
           );
         },
       ),
-
-      // ── FAB ─────────────────────────────────────────────────────────
       floatingActionButton: FutureBuilder<List<Mission>>(
         future: _missionsFuture,
         builder: (context, snapshot) {
           final missions = snapshot.data;
-          // Find the current mission id for the incident sheet
-          String currentMissionId = '';
+          String currentId = '';
           if (missions != null) {
-            final current = missions.where((m) => m.isCurrent);
-            if (current.isNotEmpty) currentMissionId = current.first.id;
+            final c = missions.where((m) => m.isCurrent);
+            if (c.isNotEmpty) currentId = c.first.id;
           }
 
           return FloatingActionButton.extended(
-            onPressed: () => _openIncidentSheet(currentMissionId),
-            backgroundColor: AppTheme.warningAmber,
-            foregroundColor: AppTheme.backgroundDark,
-            icon: const Icon(Icons.warning_amber_rounded, size: 24),
+            onPressed: () => _openIncidentSheet(currentId),
+            backgroundColor: AppTheme.caution,
+            foregroundColor: AppTheme.background,
+            elevation: 2,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(AppTheme.r8),
+            ),
+            icon: const Icon(Icons.warning_rounded, size: 18),
             label: const Text(
               'Incident',
-              style: TextStyle(fontWeight: FontWeight.w800, fontSize: 15),
+              style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13),
             ),
           );
         },

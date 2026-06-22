@@ -4,7 +4,7 @@ import '../services/api_service.dart';
 import '../theme/app_theme.dart';
 import 'main_screen.dart';
 
-/// Simple login screen that authenticates the driver via Vehicle ID.
+/// Minimal login screen.
 class LoginScreen extends StatefulWidget {
   final ApiService api;
 
@@ -14,39 +14,16 @@ class LoginScreen extends StatefulWidget {
   State<LoginScreen> createState() => _LoginScreenState();
 }
 
-class _LoginScreenState extends State<LoginScreen>
-    with SingleTickerProviderStateMixin {
+class _LoginScreenState extends State<LoginScreen> {
   final _vehicleIdCtrl = TextEditingController();
   final _passwordCtrl = TextEditingController();
   bool _isLoading = false;
-  String? _errorMessage;
-
-  late final AnimationController _fadeCtrl;
-  late final Animation<double> _fadeAnim;
-
-  @override
-  void initState() {
-    super.initState();
-    _fadeCtrl = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 900),
-    );
-    _fadeAnim = CurvedAnimation(parent: _fadeCtrl, curve: Curves.easeOut);
-    _fadeCtrl.forward();
-  }
-
-  @override
-  void dispose() {
-    _fadeCtrl.dispose();
-    _vehicleIdCtrl.dispose();
-    _passwordCtrl.dispose();
-    super.dispose();
-  }
+  String? _error;
 
   Future<void> _login() async {
     setState(() {
       _isLoading = true;
-      _errorMessage = null;
+      _error = null;
     });
 
     try {
@@ -64,18 +41,17 @@ class _LoginScreenState extends State<LoginScreen>
               api: widget.api,
               vehicleId: result.vehicleId,
             ),
-            transitionsBuilder: (_, animation, __, child) =>
-                FadeTransition(opacity: animation, child: child),
-            transitionDuration: const Duration(milliseconds: 400),
+            transitionsBuilder: (_, a, __, child) =>
+                FadeTransition(opacity: a, child: child),
+            transitionDuration: const Duration(milliseconds: 300),
           ),
         );
       } else {
-        setState(
-            () => _errorMessage = result.errorMessage ?? 'Login failed');
+        setState(() => _error = result.errorMessage ?? 'Login failed');
       }
     } catch (e) {
       if (!mounted) return;
-      setState(() => _errorMessage = 'Connection error: $e');
+      setState(() => _error = 'Connection error');
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }
@@ -84,124 +60,98 @@ class _LoginScreenState extends State<LoginScreen>
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      body: FadeTransition(
-        opacity: _fadeAnim,
-        child: Center(
-          child: SingleChildScrollView(
-            padding: const EdgeInsets.symmetric(horizontal: 32),
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                // App icon / logo area
-                Container(
-                  padding: const EdgeInsets.all(24),
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    gradient: LinearGradient(
-                      begin: Alignment.topLeft,
-                      end: Alignment.bottomRight,
-                      colors: [
-                        AppTheme.primary.withValues(alpha: 0.25),
-                        AppTheme.accent.withValues(alpha: 0.10),
-                      ],
-                    ),
-                  ),
-                  child: const Icon(
-                    Icons.local_shipping_rounded,
-                    size: 72,
-                    color: AppTheme.primary,
-                  ),
+      body: Center(
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.symmetric(horizontal: 32),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              // Icon
+              const Icon(
+                Icons.local_shipping_rounded,
+                size: 48,
+                color: AppTheme.primary,
+              ),
+              const SizedBox(height: 20),
+              const Text(
+                'Crisis Logistics',
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  fontSize: 22,
+                  fontWeight: FontWeight.w700,
+                  color: AppTheme.textHigh,
+                  letterSpacing: -0.3,
                 ),
-                const SizedBox(height: 32),
+              ),
+              const SizedBox(height: 4),
+              const Text(
+                'Driver Portal',
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w500,
+                  color: AppTheme.textLow,
+                  letterSpacing: 1.5,
+                ),
+              ),
+              const SizedBox(height: 40),
 
-                const Text(
-                  'Crisis Logistics',
+              TextField(
+                controller: _vehicleIdCtrl,
+                style:
+                    const TextStyle(color: AppTheme.textHigh, fontSize: 14),
+                decoration: const InputDecoration(
+                  labelText: 'Vehicle ID',
+                  prefixIcon: Icon(Icons.badge_rounded,
+                      color: AppTheme.textLow, size: 18),
+                ),
+              ),
+              const SizedBox(height: 12),
+
+              TextField(
+                controller: _passwordCtrl,
+                obscureText: true,
+                style:
+                    const TextStyle(color: AppTheme.textHigh, fontSize: 14),
+                decoration: const InputDecoration(
+                  labelText: 'Password',
+                  prefixIcon: Icon(Icons.lock_rounded,
+                      color: AppTheme.textLow, size: 18),
+                ),
+              ),
+
+              if (_error != null) ...[
+                const SizedBox(height: 12),
+                Text(
+                  _error!,
+                  style: const TextStyle(
+                      color: AppTheme.danger,
+                      fontSize: 12,
+                      fontWeight: FontWeight.w500),
                   textAlign: TextAlign.center,
-                  style: TextStyle(
-                    fontSize: 28,
-                    fontWeight: FontWeight.w800,
-                    color: AppTheme.textPrimary,
-                    letterSpacing: 1,
-                  ),
-                ),
-                const SizedBox(height: 6),
-                const Text(
-                  'Driver Portal',
-                  textAlign: TextAlign.center,
-                  style: TextStyle(
-                    fontSize: 15,
-                    fontWeight: FontWeight.w500,
-                    color: AppTheme.textMuted,
-                    letterSpacing: 2,
-                  ),
-                ),
-                const SizedBox(height: 48),
-
-                // Vehicle ID field
-                TextField(
-                  controller: _vehicleIdCtrl,
-                  style: const TextStyle(color: AppTheme.textPrimary),
-                  decoration: const InputDecoration(
-                    labelText: 'Vehicle ID',
-                    prefixIcon:
-                        Icon(Icons.badge_rounded, color: AppTheme.textMuted),
-                  ),
-                ),
-                const SizedBox(height: 16),
-
-                // Password field
-                TextField(
-                  controller: _passwordCtrl,
-                  obscureText: true,
-                  style: const TextStyle(color: AppTheme.textPrimary),
-                  decoration: const InputDecoration(
-                    labelText: 'Password',
-                    prefixIcon:
-                        Icon(Icons.lock_rounded, color: AppTheme.textMuted),
-                  ),
-                ),
-
-                // Error message
-                if (_errorMessage != null) ...[
-                  const SizedBox(height: 16),
-                  Container(
-                    padding: const EdgeInsets.all(12),
-                    decoration: BoxDecoration(
-                      color: AppTheme.dangerRedLight,
-                      borderRadius: BorderRadius.circular(AppTheme.radiusSm),
-                    ),
-                    child: Text(
-                      _errorMessage!,
-                      style: const TextStyle(
-                          color: AppTheme.dangerRed,
-                          fontWeight: FontWeight.w600),
-                      textAlign: TextAlign.center,
-                    ),
-                  ),
-                ],
-
-                const SizedBox(height: 32),
-
-                // Login button
-                SizedBox(
-                  height: 56,
-                  child: ElevatedButton(
-                    onPressed: _isLoading ? null : _login,
-                    child: _isLoading
-                        ? const SizedBox(
-                            width: 24,
-                            height: 24,
-                            child: CircularProgressIndicator(
-                              strokeWidth: 2.5,
-                              color: Colors.white,
-                            ),
-                          )
-                        : const Text('Log In'),
-                  ),
                 ),
               ],
-            ),
+
+              const SizedBox(height: 24),
+
+              SizedBox(
+                height: 48,
+                child: ElevatedButton(
+                  onPressed: _isLoading ? null : _login,
+                  child: _isLoading
+                      ? const SizedBox(
+                          width: 20,
+                          height: 20,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            color: Colors.white,
+                          ),
+                        )
+                      : const Text('Log In'),
+                ),
+              ),
+            ],
           ),
         ),
       ),

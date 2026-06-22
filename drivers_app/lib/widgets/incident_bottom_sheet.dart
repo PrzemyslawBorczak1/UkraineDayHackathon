@@ -35,10 +35,12 @@ class _IncidentBottomSheetState extends State<IncidentBottomSheet> {
     final incident = Incident(
       missionId: widget.currentMissionId,
       type: _selectedType!,
-      delayDuration: _selectedType == IncidentType.delay && _delayMinutes != null
-          ? Duration(minutes: _delayMinutes!)
-          : null,
-      description: _descriptionCtrl.text.isNotEmpty ? _descriptionCtrl.text : null,
+      delayDuration:
+          _selectedType == IncidentType.delay && _delayMinutes != null
+              ? Duration(minutes: _delayMinutes!)
+              : null,
+      description:
+          _descriptionCtrl.text.isNotEmpty ? _descriptionCtrl.text : null,
       reportedAt: DateTime.now(),
     );
 
@@ -50,11 +52,11 @@ class _IncidentBottomSheetState extends State<IncidentBottomSheet> {
     if (success) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: const Text('Incident reported successfully'),
-          backgroundColor: AppTheme.successGreen,
+          content: const Text('Incident reported'),
+          backgroundColor: AppTheme.success,
           behavior: SnackBarBehavior.floating,
           shape:
-              RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+              RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
         ),
       );
       Navigator.of(context).pop();
@@ -67,108 +69,104 @@ class _IncidentBottomSheetState extends State<IncidentBottomSheet> {
 
     return Padding(
       padding: EdgeInsets.only(
-        bottom: bottomInset + 24,
-        top: 16,
-        left: 24,
-        right: 24,
+        bottom: bottomInset + 20,
+        top: 12,
+        left: 20,
+        right: 20,
       ),
       child: Column(
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          // Handle bar
+          // Handle
           Center(
             child: Container(
-              width: 40,
-              height: 4,
+              width: 32,
+              height: 3,
               decoration: BoxDecoration(
-                color: AppTheme.textMuted,
+                color: AppTheme.textLow,
                 borderRadius: BorderRadius.circular(2),
               ),
             ),
           ),
-          const SizedBox(height: 20),
+          const SizedBox(height: 16),
 
           // Title
           Row(
             children: [
-              Container(
-                padding: const EdgeInsets.all(8),
-                decoration: BoxDecoration(
-                  color: AppTheme.warningAmber.withValues(alpha: 0.15),
-                  borderRadius: BorderRadius.circular(AppTheme.radiusSm),
-                ),
-                child: const Icon(Icons.warning_amber_rounded,
-                    color: AppTheme.warningAmber, size: 26),
-              ),
-              const SizedBox(width: 14),
+              Icon(Icons.warning_rounded,
+                  color: AppTheme.caution, size: 20),
+              const SizedBox(width: 10),
               const Text(
                 'Report Incident',
                 style: TextStyle(
-                  fontSize: 22,
-                  fontWeight: FontWeight.w700,
-                  color: AppTheme.textPrimary,
+                  fontSize: 16,
+                  fontWeight: FontWeight.w600,
+                  color: AppTheme.textHigh,
                 ),
               ),
             ],
           ),
-          const SizedBox(height: 24),
+          const SizedBox(height: 20),
 
-          // Incident type dropdown
+          // Type
           DropdownButtonFormField<IncidentType>(
             decoration: const InputDecoration(labelText: 'Incident Type'),
-            dropdownColor: AppTheme.surfaceLight,
+            dropdownColor: AppTheme.surfaceAlt,
             initialValue: _selectedType,
             items: IncidentType.values.map((type) {
               return DropdownMenuItem(
                 value: type,
                 child: Text(type.label,
-                    style: const TextStyle(color: AppTheme.textPrimary)),
+                    style: const TextStyle(
+                        color: AppTheme.textHigh, fontSize: 13)),
               );
             }).toList(),
             onChanged: (value) => setState(() => _selectedType = value),
           ),
 
-          // Delay duration – only when "Opóźnienie" is selected
           if (_selectedType == IncidentType.delay) ...[
-            const SizedBox(height: 16),
+            const SizedBox(height: 12),
             DropdownButtonFormField<int>(
-              decoration: const InputDecoration(labelText: 'Delay Duration'),
-              dropdownColor: AppTheme.surfaceLight,
+              decoration:
+                  const InputDecoration(labelText: 'Delay Duration'),
+              dropdownColor: AppTheme.surfaceAlt,
               initialValue: _delayMinutes,
               items: _delayOptions.map((m) {
-                final label =
-                    m >= 60 ? '${m ~/ 60}h ${m % 60 > 0 ? '${m % 60}min' : ''}' : '$m min';
+                final label = m >= 60
+                    ? '${m ~/ 60}h${m % 60 > 0 ? ' ${m % 60}min' : ''}'
+                    : '$m min';
                 return DropdownMenuItem(
                   value: m,
                   child: Text(label.trim(),
-                      style: const TextStyle(color: AppTheme.textPrimary)),
+                      style: const TextStyle(
+                          color: AppTheme.textHigh, fontSize: 13)),
                 );
               }).toList(),
               onChanged: (value) => setState(() => _delayMinutes = value),
             ),
           ],
 
-          const SizedBox(height: 16),
+          const SizedBox(height: 12),
 
-          // Description
           TextField(
             controller: _descriptionCtrl,
             maxLines: 3,
-            style: const TextStyle(color: AppTheme.textPrimary),
+            style: const TextStyle(color: AppTheme.textHigh, fontSize: 13),
             decoration: const InputDecoration(
               labelText: 'Opis (Optional)',
               alignLabelWithHint: true,
             ),
           ),
-          const SizedBox(height: 28),
+          const SizedBox(height: 20),
 
-          // Action buttons
+          // Actions
           Row(
             children: [
               Expanded(
                 child: TextButton(
-                  onPressed: _isSending ? null : () => Navigator.of(context).pop(),
+                  onPressed:
+                      _isSending ? null : () => Navigator.of(context).pop(),
                   child: const Text('Cancel'),
                 ),
               ),
@@ -176,16 +174,17 @@ class _IncidentBottomSheetState extends State<IncidentBottomSheet> {
               Expanded(
                 flex: 2,
                 child: ElevatedButton(
-                  onPressed: _selectedType == null || _isSending ? null : _submit,
+                  onPressed:
+                      _selectedType == null || _isSending ? null : _submit,
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: AppTheme.warningAmber,
-                    foregroundColor: AppTheme.backgroundDark,
-                    disabledBackgroundColor: AppTheme.surfaceLight,
+                    backgroundColor: AppTheme.caution,
+                    foregroundColor: AppTheme.background,
+                    disabledBackgroundColor: AppTheme.surfaceAlt,
                   ),
                   child: _isSending
                       ? const SizedBox(
-                          height: 20,
-                          width: 20,
+                          height: 18,
+                          width: 18,
                           child: CircularProgressIndicator(strokeWidth: 2),
                         )
                       : const Text('Submit'),
