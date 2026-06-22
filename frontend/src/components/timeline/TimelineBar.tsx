@@ -106,7 +106,7 @@ export function TimelineBar({
 
   return (
     <HeaderPill
-      className={cx("flex-col items-stretch! gap-3 px-5 py-3 min-w-105", className)}
+      className={cx("flex-col items-stretch! gap-3 px-5 py-3 min-w-105 rounded-xl!", className)}
     >
       <div className="flex items-center gap-3">
         <SectionLabel className="shrink-0">Window</SectionLabel>
