@@ -10,6 +10,7 @@ class Status(Enum):
     ACTIVE_WAITING = 2
     IN_PROGRESS_ACTIVE = 3
     IN_PROGRESS_PASSIVE = 4
+    UNLOADING = 5
 
 
 class Priority(Enum):
@@ -101,7 +102,6 @@ class Mission:
     remaining_weight: float = 0.0
     remaining_volume: float = 0.0
 
-    # Nowe pola do śledzenia obciążenia budżetu
     budget_commitment_date: datetime | None = None
     budget_commitment_amount: float = 0.0
 
@@ -132,7 +132,6 @@ class TimeInterval:
     end: datetime
     status: Status
     mission_assignment: MissionAssignment | None = None
-    is_delivery_trip: bool = False
     cost: float = 0.0
 
     def overlaps(self, other_start: datetime, other_end: datetime) -> bool:
@@ -223,7 +222,6 @@ class Vehicle:
         for interval in sorted(self.timeSchedule, key=lambda x: x.start):
             if (
                 interval.status == Status.IN_PROGRESS_ACTIVE
-                and interval.is_delivery_trip
                 and interval.mission_assignment
             ):
                 assignments.append(interval.mission_assignment)
@@ -238,28 +236,24 @@ class Vehicle:
 
         for interval in sorted_intervals:
             if interval.mission_assignment:
-                # Po zakończeniu dostawy (jazda z ładunkiem) pojazd jest u celu
-                if interval.is_delivery_trip and target_time >= interval.end:
-                    current_loc = (
-                        interval.mission_assignment.mission.destination.location
-                    )
-                # Po zakończeniu rozładunku (aktywny interwał niebędący dostawą)
-                elif (
+                if (
                     interval.status == Status.IN_PROGRESS_ACTIVE
-                    and not interval.is_delivery_trip
                     and target_time >= interval.end
                 ):
-                    # Rozładunek odbywa się w destynacji
                     current_loc = (
                         interval.mission_assignment.mission.destination.location
                     )
-                # Po zakończeniu dojazdu (pusty przejazd) – pojazd dotarł do origin
+                elif (
+                    interval.status == Status.UNLOADING and target_time >= interval.end
+                ):
+                    current_loc = (
+                        interval.mission_assignment.mission.destination.location
+                    )
                 elif (
                     interval.status == Status.IN_PROGRESS_PASSIVE
                     and target_time >= interval.end
                 ):
                     current_loc = interval.mission_assignment.mission.origin.location
-                # Dla interwałów oczekiwania lokalizacja się nie zmienia
         return current_loc
 
     def get_earliest_available_time(self, after: datetime) -> datetime:
@@ -312,7 +306,6 @@ class DailyALNSScheduler:
         return timedelta(hours=(distance_km / 60.0) + 2.0)
 
     def calculate_daily_spent(self, target_date: datetime) -> float:
-        """Sumuje zadeklarowane koszty misji, które uzyskały stan IN_PROGRESS danego dnia."""
         total = 0.0
         for m in self.missions:
             if (
@@ -356,22 +349,15 @@ class DailyALNSScheduler:
         current_date: datetime,
         remaining_budget: float,
     ) -> tuple[float, list[TimeInterval], float, float, float] | None:
-        """
-        Próbuje przypisać pojazd do misji.
-        Zwraca (score, intervals, cost, allocated_weight, allocated_volume) lub None.
-        """
         if vehicle.is_broken:
             return None
 
         earliest_start = max(current_date, mission.available_from)
         earliest_start = vehicle.get_earliest_available_time(earliest_start)
 
-        # Koszt pojedynczego kursu
         single_trip_cost = vehicle.carrier.price_per_km * mission.route_distance
 
-        # Sprawdzenie budżetu – tylko dla nowych misji (CREATED) szacujemy całkowity koszt
         if mission.state == State.CREATED:
-            # Szacunkowa liczba kursów potrzebna do pełnej realizacji
             num_trips = math.ceil(
                 max(
                     mission.weight / vehicle.weight_capacity,
@@ -381,14 +367,12 @@ class DailyALNSScheduler:
             estimated_total_cost = num_trips * single_trip_cost
             if estimated_total_cost > remaining_budget:
                 return None
-        # Dla misji już będących w toku (IN_PROGRESS) nie sprawdzamy budżetu – został już zarezerwowany
 
         base_day_midnight = current_date.replace(
             hour=0, minute=0, second=0, microsecond=0
         )
 
-        # Przeszukiwanie okna godzinowego
-        for hour_offset in range(0, 48):  # do 48h, aby obsłużyć przejścia przez północ
+        for hour_offset in range(0, 48):
             possible_start = base_day_midnight + timedelta(hours=hour_offset)
 
             if possible_start < earliest_start:
@@ -447,7 +431,6 @@ class DailyALNSScheduler:
                         arrival_at_origin,
                         Status.IN_PROGRESS_PASSIVE,
                         assignment,
-                        is_delivery_trip=False,
                         cost=0.0,
                     )
                 )
@@ -460,19 +443,17 @@ class DailyALNSScheduler:
                         wh_open,
                         Status.PASSIVE_WAITING,
                         assignment,
-                        is_delivery_trip=False,
                         cost=0.0,
                     )
                 )
 
-            # 3. Transport właściwy (dostawa)
+            # 3. Transport właściwy (jazda z ładunkiem)
             intervals.append(
                 TimeInterval(
                     loading_start,
                     delivery_arrival,
                     Status.IN_PROGRESS_ACTIVE,
                     assignment,
-                    is_delivery_trip=True,
                     cost=single_trip_cost,
                 )
             )
@@ -485,20 +466,18 @@ class DailyALNSScheduler:
                         wh_dest_open,
                         Status.ACTIVE_WAITING,
                         assignment,
-                        is_delivery_trip=False,
                         cost=0.0,
                     )
                 )
 
-            # 5. Rozładunek
+            # 5. Rozładunek (nowy stan UNLOADING)
             if delivery_start < delivery_end:
                 intervals.append(
                     TimeInterval(
                         delivery_start,
                         delivery_end,
-                        Status.IN_PROGRESS_ACTIVE,
+                        Status.UNLOADING,
                         assignment,
-                        is_delivery_trip=False,
                         cost=0.0,
                     )
                 )
@@ -564,7 +543,6 @@ class DailyALNSScheduler:
                     if best_vehicle and best_result:
                         _, intervals, trip_cost, alloc_w, alloc_v = best_result
 
-                        # Aktualizacja misji
                         mission.remaining_weight -= alloc_w
                         mission.remaining_volume -= alloc_v
                         mission.cost += trip_cost
@@ -572,7 +550,6 @@ class DailyALNSScheduler:
                         was_created = mission.state == State.CREATED
                         if was_created:
                             mission.state = State.IN_PROGRESS
-                            # Rezerwacja budżetu na całą misję
                             num_trips = math.ceil(
                                 max(
                                     mission.weight / best_vehicle.weight_capacity,
@@ -599,7 +576,6 @@ class DailyALNSScheduler:
                                 self.unassigned_missions.remove(mission)
 
                         assignments_made = True
-                        # Nie odejmujemy już kosztu kursu od budżetu – użyliśmy rezerwacji
 
             current_date = next_date
 
@@ -610,7 +586,6 @@ class DailyALNSScheduler:
             for interval in vehicle.timeSchedule:
                 if (
                     interval.status == Status.IN_PROGRESS_ACTIVE
-                    and interval.is_delivery_trip
                     and interval.mission_assignment
                     and interval.start >= simulation_time
                 ):
@@ -630,7 +605,6 @@ class DailyALNSScheduler:
 
             mission = assignment.mission
 
-            # Usuwamy wszystkie interwały związane z tym przypisaniem
             vehicle.timeSchedule = [
                 intv
                 for intv in vehicle.timeSchedule
@@ -648,10 +622,8 @@ class DailyALNSScheduler:
             )
             mission.cost = max(0.0, mission.cost - delivery_interval.cost)
 
-            # Przywracanie stanu – jeśli nic nie zostało przypisane, wracamy do CREATED
             if mission.remaining_weight >= mission.weight - 0.01:
                 mission.state = State.CREATED
-                # Usuwamy rezerwację budżetową
                 mission.budget_commitment_date = None
                 mission.budget_commitment_amount = 0.0
             else:
@@ -702,13 +674,15 @@ def print_vehicle_working_hours(vehicle: Vehicle):
         Status.IN_PROGRESS_PASSIVE: "🔵",
         Status.ACTIVE_WAITING: "🟡",
         Status.PASSIVE_WAITING: "⚪",
+        Status.UNLOADING: "🟠",
     }
 
     status_labels = {
-        Status.IN_PROGRESS_ACTIVE: "JAZDA Z ŁADUNKIEM",
+        Status.IN_PROGRESS_ACTIVE: "JAZDA Z ŁADUNKIEM (DOSTAWA)",
         Status.IN_PROGRESS_PASSIVE: "JAZDA BEZ ŁADUNKU",
         Status.ACTIVE_WAITING: "OCZEKIWANIE Z ŁADUNKIEM",
         Status.PASSIVE_WAITING: "OCZEKIWANIE BEZ ŁADUNKU",
+        Status.UNLOADING: "ROZŁADUNEK",
     }
 
     for interval in sorted_intervals:
@@ -728,10 +702,9 @@ def print_vehicle_working_hours(vehicle: Vehicle):
         icon = status_icons.get(interval.status, "❓")
         label = status_labels.get(interval.status, str(interval.status))
 
-        trip_info = " (DOSTAWA)" if interval.is_delivery_trip else ""
         cost_info = f" | Koszt: {interval.cost:.2f}zł" if interval.cost > 0 else ""
 
-        print(f" [{start_str} -> {end_str}] {icon} {label}{trip_info}")
+        print(f" [{start_str} -> {end_str}] {icon} {label}")
         print(f"   Misja: {m_id} | Waga: {w_val:.1f}kg{cost_info}")
 
 
@@ -762,10 +735,10 @@ if __name__ == "__main__":
     budget = Budget(daily=30000.0, weekly=210000.0, monthly=900000.0)
 
     wh1 = Warehouses(
-        "WH_START", Location(50.45, 30.52), time(6, 0), time(18, 0), True, 2.0
+        "WH_START", Location(50.45, 30.52), time(4, 0), time(18, 0), True, 2.0
     )
     wh2 = Warehouses(
-        "WH_KONIEC", Location(49.83, 24.02), time(8, 0), time(22, 0), True, 1.5
+        "WH_KONIEC", Location(49.83, 24.02), time(18, 0), time(22, 0), True, 1.5
     )
 
     carrier = Carrier(
