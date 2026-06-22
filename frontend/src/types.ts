@@ -30,3 +30,48 @@ export type StatisticsData = {
   missions: Mission[];
   vehicles: Vehicle[];
 };
+
+// --- Dispatch UI domain ----------------------------------------------------
+
+/** A left-rail navigation entry with a live count. */
+export type NavEntry = {
+  id: string;
+  label: string;
+  count: number;
+};
+
+/** A row in the mission results list. */
+export type MissionResult = {
+  id: string;
+  tag: string;
+  route: string;
+};
+
+/** Operational state of a vehicle, used to pick a status badge tone. */
+export type VehicleState = "queued" | "transit" | "delivered" | "maintenance";
+
+/** A vehicle assigned to a mission. */
+export type VehicleAssignment = {
+  id: string;
+  kind: string;
+  state: VehicleState;
+};
+
+/** The full mission detail shown in the right rail. */
+export type MissionDetail = {
+  id: string;
+  status: string;
+  title: string;
+  meta: string;
+  deadline: string;
+  origin: string;
+  destination: string;
+  carrier: { name: string; city: string };
+  vehicles: VehicleAssignment[];
+};
+
+/** A start/end time window the dispatcher is looking at. */
+export type TimeWindow = {
+  start: Date;
+  end: Date;
+};

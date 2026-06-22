@@ -1,40 +1,9 @@
-import { useEffect, useState } from "react";
-import { HeaderPill, SectionLabel, cx } from "../ui";
+import { useCallback, useEffect, useState } from "react";
+import { CalendarIcon, HeaderPill, SectionLabel, cx } from "../ui";
+import { DAY_MS, HOUR_MS, clamp, formatStamp, spanDays, toInputValue } from "../../lib/time";
+import type { TimeWindow } from "../../types";
 
-/** The time window the dispatcher is looking at. */
-export type TimeWindow = {
-  start: Date;
-  end: Date;
-};
-
-const DAY_MS = 24 * 60 * 60 * 1000;
-const HOUR_MS = 60 * 60 * 1000;
-
-/** Formats a date like "21 Jun 11:00". */
-function formatStamp(d: Date): string {
-  const day = d.getDate().toString().padStart(2, "0");
-  const month = d.toLocaleString("en-US", { month: "short" });
-  const hh = d.getHours().toString().padStart(2, "0");
-  const mm = d.getMinutes().toString().padStart(2, "0");
-  return `${day} ${month} ${hh}:${mm}`;
-}
-
-/** Whole-day span between two dates. */
-function spanDays(w: TimeWindow): number {
-  return Math.max(0, Math.round((w.end.getTime() - w.start.getTime()) / DAY_MS));
-}
-
-/** Date -> value string for <input type="datetime-local"> (local time). */
-function toInputValue(d: Date): string {
-  const pad = (n: number) => n.toString().padStart(2, "0");
-  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(
-    d.getHours()
-  )}:${pad(d.getMinutes())}`;
-}
-
-function clamp(n: number, lo: number, hi: number): number {
-  return Math.min(hi, Math.max(lo, n));
-}
+export type { TimeWindow };
 
 /** Editable date field — a visible, styled native datetime-local input. */
 function DateField({
@@ -45,7 +14,8 @@ function DateField({
   onChange: (next: Date) => void;
 }) {
   return (
-    <span className="flex items-center px-3 py-1.5 bg-neutral-100 rounded-lg hover:bg-neutral-200/70 transition-colors focus-within:ring-1 focus-within:ring-neutral-300">
+    <span className="flex items-center gap-2 px-3 py-1.5 bg-neutral-100 rounded-lg hover:bg-neutral-200/70 transition-colors focus-within:ring-1 focus-within:ring-neutral-300">
+      <CalendarIcon className="text-neutral-400" />
       <input
         type="datetime-local"
         value={toInputValue(value)}
@@ -87,10 +57,10 @@ export function TimelineBar({
   });
 
   const window = value ?? internal;
-  const setWindow = (next: TimeWindow) => {
-    if (onChange) onChange(next);
-    else setInternal(next);
-  };
+  const setWindow = useCallback(
+    (next: TimeWindow) => (onChange ? onChange(next) : setInternal(next)),
+    [onChange]
+  );
 
   // Cursor position (ms epoch) somewhere between start and end.
   const [cursor, setCursor] = useState<number>(() => window.start.getTime());
@@ -100,26 +70,37 @@ export function TimelineBar({
     setCursor((c) => clamp(c, window.start.getTime(), window.end.getTime()));
   }, [window.start, window.end]);
 
-  const setStart = (start: Date) => {
-    // Never let start cross end; keep at least one hour of range.
-    const end = window.end.getTime() <= start.getTime()
-      ? new Date(start.getTime() + DAY_MS)
-      : window.end;
-    setWindow({ start, end });
-  };
+  const setStart = useCallback(
+    (start: Date) => {
+      // Never let start cross end; keep at least a day of range.
+      const end =
+        window.end.getTime() <= start.getTime()
+          ? new Date(start.getTime() + DAY_MS)
+          : window.end;
+      setWindow({ start, end });
+    },
+    [window.end, setWindow]
+  );
 
-  const setEnd = (end: Date) => {
-    const start = end.getTime() <= window.start.getTime()
-      ? new Date(end.getTime() - DAY_MS)
-      : window.start;
-    setWindow({ start, end });
-  };
+  const setEnd = useCallback(
+    (end: Date) => {
+      const start =
+        end.getTime() <= window.start.getTime()
+          ? new Date(end.getTime() - DAY_MS)
+          : window.start;
+      setWindow({ start, end });
+    },
+    [window.start, setWindow]
+  );
 
-  const handleScrub = (next: number) => {
-    const clamped = clamp(next, window.start.getTime(), window.end.getTime());
-    setCursor(clamped);
-    onCursorChange?.(new Date(clamped));
-  };
+  const handleScrub = useCallback(
+    (next: number) => {
+      const clamped = clamp(next, window.start.getTime(), window.end.getTime());
+      setCursor(clamped);
+      onCursorChange?.(new Date(clamped));
+    },
+    [window.start, window.end, onCursorChange]
+  );
 
   const cursorDate = new Date(clamp(cursor, window.start.getTime(), window.end.getTime()));
 
@@ -134,7 +115,7 @@ export function TimelineBar({
         <DateField value={window.end} onChange={setEnd} />
         <div className="h-4 w-px bg-neutral-200" />
         <span className="text-[11px] tabular-nums text-neutral-500 shrink-0">
-          {spanDays(window)}d span
+          {spanDays(window.start, window.end)}d span
         </span>
       </div>
 

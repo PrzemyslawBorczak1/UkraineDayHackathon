@@ -2,11 +2,7 @@
 // Visual language is documented in style_guides/kord-styles/STYLES.md.
 // These are intentionally dumb/presentational so they stay reusable.
 import * as React from "react";
-
-/** Joins truthy class fragments — tiny local helper to avoid a clsx dependency. */
-export function cx(...parts: Array<string | false | null | undefined>): string {
-  return parts.filter(Boolean).join(" ");
-}
+import { cx } from "../../lib/cx";
 
 /** Floating pill that sits over the map (header / control surfaces). */
 export function HeaderPill({
@@ -164,15 +160,18 @@ export function CtaPill({
   );
 }
 
+/** Available tones for status badges. */
+export type BadgeTone = "neutral" | "emerald" | "amber" | "rose" | "sky";
+
 /** Badge used for statuses (maintenance / transit / queued …). */
 export function Badge({
   children,
   tone = "neutral",
 }: {
   children: React.ReactNode;
-  tone?: "neutral" | "emerald" | "amber" | "rose" | "sky";
+  tone?: BadgeTone;
 }) {
-  const tones: Record<string, string> = {
+  const tones: Record<BadgeTone, string> = {
     neutral: "bg-neutral-100 text-neutral-600 ring-neutral-200",
     emerald: "bg-emerald-50 text-emerald-600 ring-emerald-200",
     amber: "bg-amber-50 text-amber-600 ring-amber-200",
