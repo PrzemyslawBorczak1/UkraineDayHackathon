@@ -123,9 +123,14 @@ class MissionCard extends StatelessWidget {
     );
   }
 
-  // ─── Timeline (origin → destination) ────────────────────────────────
+  // ─── Timeline (origin → destination → unloading) ─────────────────
 
   Widget _buildTimeline() {
+    final arrivalTime = mission.endTime;
+    final unloadDoneTime = arrivalTime.add(mission.unloadingWaitTime);
+    final showWait = mission.isCurrent && mission.unloadingWaitTime.inMinutes > 0;
+    final nodeCount = showWait ? 3 : 2;
+
     return Row(
       children: [
         // Left side: times
@@ -138,22 +143,32 @@ class MissionCard extends StatelessWidget {
                     fontWeight: FontWeight.w700,
                     color: AppTheme.textPrimary)),
             const SizedBox(height: 20),
-            Text(_hhmm(mission.endTime),
+            Text(_hhmm(arrivalTime),
                 style: const TextStyle(
                     fontSize: 14,
                     fontWeight: FontWeight.w700,
                     color: AppTheme.textPrimary)),
+            if (showWait) ...[
+              const SizedBox(height: 20),
+              Text(_hhmm(unloadDoneTime),
+                  style: const TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w700,
+                      color: AppTheme.warningAmber)),
+            ],
           ],
         ),
         const SizedBox(width: 12),
         // Centre: dots & line
         SizedBox(
-          height: 56,
+          height: showWait ? 92 : 56,
           width: 20,
           child: CustomPaint(
             painter: _TimelinePainter(
               dotColor: AppTheme.primary,
               lineColor: AppTheme.divider,
+              nodeCount: nodeCount,
+              lastSegmentColor: showWait ? AppTheme.warningAmber : null,
             ),
           ),
         ),
@@ -174,6 +189,24 @@ class MissionCard extends StatelessWidget {
                       fontSize: 15,
                       fontWeight: FontWeight.w600,
                       color: AppTheme.textPrimary)),
+              if (showWait) ...[
+                const SizedBox(height: 16),
+                Row(
+                  children: [
+                    const Icon(Icons.hourglass_bottom_rounded,
+                        size: 16, color: AppTheme.warningAmber),
+                    const SizedBox(width: 4),
+                    Text(
+                      'Unloading · ${mission.unloadingWaitTime.inMinutes} min',
+                      style: const TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w600,
+                        color: AppTheme.warningAmber,
+                      ),
+                    ),
+                  ],
+                ),
+              ],
             ],
           ),
         ),
@@ -181,7 +214,7 @@ class MissionCard extends StatelessWidget {
     );
   }
 
-  // ─── Details row (weight / volume / wait) ───────────────────────────
+  // ─── Details row (weight / volume) ──────────────────────────────────
 
   Widget _buildDetails() {
     return Container(
@@ -191,12 +224,10 @@ class MissionCard extends StatelessWidget {
         borderRadius: BorderRadius.circular(AppTheme.radiusSm),
       ),
       child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        mainAxisAlignment: MainAxisAlignment.spaceEvenly,
         children: [
           _detailChip(Icons.scale_rounded, 'Weight: ${_formatWeight(mission.weight)}'),
           _detailChip(Icons.view_in_ar_rounded, 'Volume: ${mission.volume.toStringAsFixed(0)}L'),
-          _detailChip(Icons.hourglass_bottom_rounded,
-              'Wait: ${mission.unloadingWaitTime.inMinutes} min'),
         ],
       ),
     );
@@ -268,35 +299,59 @@ class MissionCard extends StatelessWidget {
 class _TimelinePainter extends CustomPainter {
   final Color dotColor;
   final Color lineColor;
+  final int nodeCount;
+  final Color? lastSegmentColor;
 
-  _TimelinePainter({required this.dotColor, required this.lineColor});
+  _TimelinePainter({
+    required this.dotColor,
+    required this.lineColor,
+    this.nodeCount = 2,
+    this.lastSegmentColor,
+  });
 
   @override
   void paint(Canvas canvas, Size size) {
     final cx = size.width / 2;
-
-    // Dashed line
-    final linePaint = Paint()
-      ..color = lineColor
-      ..strokeWidth = 2
-      ..style = PaintingStyle.stroke;
-
+    const dotRadius = 5.0;
     const dashHeight = 4.0;
     const dashGap = 3.0;
-    double y = 8;
-    while (y < size.height - 8) {
-      canvas.drawLine(Offset(cx, y), Offset(cx, y + dashHeight), linePaint);
-      y += dashHeight + dashGap;
+
+    // Calculate node Y positions evenly
+    final spacing = (size.height - dotRadius * 2) / (nodeCount - 1);
+    final nodeYs = List.generate(nodeCount, (i) => dotRadius + i * spacing);
+
+    // Draw dashed lines between nodes
+    for (int seg = 0; seg < nodeCount - 1; seg++) {
+      final isLast = seg == nodeCount - 2;
+      final segColor = (isLast && lastSegmentColor != null)
+          ? lastSegmentColor!
+          : lineColor;
+
+      final paint = Paint()
+        ..color = segColor
+        ..strokeWidth = 2
+        ..style = PaintingStyle.stroke;
+
+      double y = nodeYs[seg] + dotRadius + 2;
+      final yEnd = nodeYs[seg + 1] - dotRadius - 2;
+      while (y < yEnd) {
+        final end = (y + dashHeight).clamp(y, yEnd);
+        canvas.drawLine(Offset(cx, y), Offset(cx, end), paint);
+        y += dashHeight + dashGap;
+      }
     }
 
-    // Top dot (origin)
-    final dotPaint = Paint()..color = dotColor;
-    canvas.drawCircle(Offset(cx, 4), 5, dotPaint);
-
-    // Bottom dot (destination)
-    canvas.drawCircle(Offset(cx, size.height - 4), 5, dotPaint);
+    // Draw dots
+    for (int i = 0; i < nodeCount; i++) {
+      final isLast = i == nodeCount - 1;
+      final color = (isLast && lastSegmentColor != null)
+          ? lastSegmentColor!
+          : dotColor;
+      canvas.drawCircle(Offset(cx, nodeYs[i]), dotRadius, Paint()..color = color);
+    }
   }
 
   @override
   bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
 }
+
