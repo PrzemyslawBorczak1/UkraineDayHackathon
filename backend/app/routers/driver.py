@@ -94,7 +94,7 @@ def _task_payload(task: Task) -> dict:
         "volume": m.volume_m3,
         "special_requirements": special,
         "unloading_wait_minutes": None,  # task-level metadata, added later
-        "is_current": m.status == MissionStatus.IN_TRANSIT,
+        "is_current": m.status == MissionStatus.IN_PROGRESS,
     }
 
 

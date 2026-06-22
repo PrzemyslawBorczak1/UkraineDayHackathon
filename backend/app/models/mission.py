@@ -11,19 +11,10 @@ from app.database import Base
 
 # Mission status constants
 class MissionStatus:
-    # Normal flow
-    NEW = "NEW"
-    PENDING = "Pending"  # from CSV
-    FUNDED = "FUNDED"
-    ASSIGNED = "ASSIGNED"
-    IN_TRANSIT = "IN_TRANSIT"
-    DELIVERED = "DELIVERED"
-    CLOSED = "CLOSED"
-    # Exception branches
-    DEFERRED = "DEFERRED"    # no budget
-    QUEUED = "QUEUED"        # no resource (e.g., refrigeration)
-    INCIDENT = "INCIDENT"    # breakdown/failure
-    REASSIGN = "REASSIGN"    # recovered, needs re-allocation
+    NEW = "NEW"                  # created, awaiting carrier acceptance
+    ACCEPTED = "ACCEPTED"        # origin-warehouse carrier made it available
+    IN_PROGRESS = "IN_PROGRESS"  # execution started
+    DONE = "DONE"                # completed
 
 
 class Mission(Base):
