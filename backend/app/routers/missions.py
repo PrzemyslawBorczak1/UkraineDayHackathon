@@ -27,9 +27,11 @@ class MissionCreate(BaseModel):
     origin_point: str
     origin_lat: float
     origin_lng: float
+    origin_address: Optional[str] = None
     destination_point: str
     dest_lat: float
     dest_lng: float
+    dest_address: Optional[str] = None
     route_distance_km: int
     weight_t: float
     volume_m3: float
@@ -63,8 +65,10 @@ def create_mission(body: MissionCreate, db: Session = Depends(get_db)):
         cargo_type=body.cargo_type,
         origin_point=body.origin_point,
         origin_geom=from_shape(Point(body.origin_lng, body.origin_lat), srid=4326),
+        origin_address=body.origin_address,
         destination_point=body.destination_point,
         dest_geom=from_shape(Point(body.dest_lng, body.dest_lat), srid=4326),
+        dest_address=body.dest_address,
         route_distance_km=body.route_distance_km,
         weight_t=body.weight_t,
         volume_m3=body.volume_m3,
