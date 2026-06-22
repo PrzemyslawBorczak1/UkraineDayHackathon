@@ -658,6 +658,39 @@ class DailyALNSScheduler:
                 self.repair_greedy(start_date, end_date)
 
 
+def handle_vehicle_breakdown(
+    vehicle: Vehicle, simulation_time: datetime, scheduler: DailyALNSScheduler
+):
+    for interval in vehicle.timeSchedule[:]:
+        # Usuwamy tylko przyszłe interwały (po czasie awarii)
+        if interval.start >= simulation_time:
+            mission_assignment = interval.mission_assignment
+            if mission_assignment:
+                mission = mission_assignment.mission
+                # Cofnij alokację ładunku
+                mission.remaining_weight = min(
+                    mission.weight,
+                    mission.remaining_weight + mission_assignment.allocated_weight,
+                )
+                mission.remaining_volume = min(
+                    mission.volume,
+                    mission.remaining_volume + mission_assignment.allocated_volume,
+                )
+                if vehicle.id in mission.assigned_vehicles:
+                    mission.assigned_vehicles.remove(vehicle.id)
+                # Jeśli misja była w toku, mogła mieć zarezerwowany budżet – warto go zostawić,
+                # bo misja nadal jest IN_PROGRESS (budget_commitment_date nie zmienia się).
+            vehicle.timeSchedule.remove(interval)
+
+    vehicle.is_broken = True
+    vehicle.disruption_location = vehicle.get_location_at_time(simulation_time)
+    # Opcjonalnie: vehicle.locked_until = simulation_time + timedelta(hours=8)  # szacowany czas naprawy
+
+    # Odbuduj listę nieprzypisanych misji i zaplanuj na nowo
+    scheduler._rebuild_unassigned_list()
+    scheduler.run_alns(iterations=5, start_date=simulation_time, end_date=...)
+
+
 def print_vehicle_working_hours(vehicle: Vehicle):
     print(f"\n{'='*60}")
     print(f"HARMONOGRAM PRACY POJAZDU: {vehicle.id}")
