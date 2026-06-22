@@ -6,6 +6,7 @@ Run: python -m app.load
 """
 import csv
 import os
+import re
 from datetime import datetime, date
 from pathlib import Path
 
@@ -55,6 +56,31 @@ def parse_int(value: str) -> int:
 def make_point(lat: str, lng: str):
     """Create PostGIS point from lat/lng strings. Note: Point takes (lng, lat)."""
     return from_shape(Point(parse_float(lng), parse_float(lat)), srid=4326)
+
+
+_TEMP_RE = re.compile(r"(-?\d+)\s*-\s*(-?\d+)\s*°?\s*C", re.IGNORECASE)
+
+
+def parse_requirements(note: str):
+    """
+    Extract structured requirements from a mission's Special Requirement note.
+
+    Returns (temperature_range, certificate_adr, liftgate):
+      - temperature_range: [min_c, max_c] if a "X-Y°C" range is present, else None
+      - certificate_adr:   True if note mentions ADR or hazmat, else False
+      - liftgate:          True if note mentions a liftgate, else False
+    """
+    low = (note or "").lower()
+
+    temp_range = None
+    m = _TEMP_RE.search(note or "")
+    if m and "temperature" in low:
+        temp_range = [int(m.group(1)), int(m.group(2))]
+
+    certificate_adr = "adr" in low or "hazmat" in low
+    liftgate = "liftgate" in low
+
+    return temp_range, certificate_adr, liftgate
 
 
 def load_carriers(session, csv_path: Path):
@@ -147,6 +173,8 @@ def load_missions(session, csv_path: Path):
     with open(csv_path, encoding="utf-8") as f:
         reader = csv.DictReader(f)
         for row in reader:
+            special_requirement = row.get("Special Requirement", "").strip() or None
+            temp_range, certificate_adr, liftgate = parse_requirements(special_requirement)
             mission = Mission(
                 id=row["Mission ID"],
                 cargo_type=row["Cargo Type"],
@@ -167,7 +195,10 @@ def load_missions(session, csv_path: Path):
                 # replay_mission_state(), which seeds from NEW.
                 status=MissionStatus.NEW,
                 requesting_authority=row["Requesting Authority"],
-                special_requirement=row.get("Special Requirement", "").strip() or None,
+                special_requirement=special_requirement,
+                required_temperature=temp_range,
+                certificate_adr=certificate_adr,
+                liftgate=liftgate,
             )
             session.add(mission)
     session.commit()

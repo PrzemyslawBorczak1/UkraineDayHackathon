@@ -1,12 +1,16 @@
 from contextlib import asynccontextmanager
+from http import HTTPStatus
 
-from fastapi import FastAPI, Depends
+from fastapi import FastAPI, Depends, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
+from starlette.exceptions import HTTPException as StarletteHTTPException
 from sqlalchemy.orm import Session
 from sqlalchemy import text
 
 from app.database import get_db, init_db
 from app.models import Carrier, Vehicle, Warehouse, Mission, CrisisObject, Budget
+from app.routers import driver
 
 
 @asynccontextmanager
@@ -30,6 +34,21 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+app.include_router(driver.router)
+
+
+@app.exception_handler(StarletteHTTPException)
+async def http_exception_handler(request: Request, exc: StarletteHTTPException):
+    """Uniform error shape: {error, message, status_code}."""
+    try:
+        phrase = HTTPStatus(exc.status_code).phrase
+    except ValueError:
+        phrase = "Error"
+    return JSONResponse(
+        status_code=exc.status_code,
+        content={"error": phrase, "message": exc.detail, "status_code": exc.status_code},
+    )
 
 
 @app.get("/")
