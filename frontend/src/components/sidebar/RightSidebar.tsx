@@ -1,0 +1,104 @@
+import { memo } from "react";
+import { Badge, SectionLabel, TruckGlyph, cx } from "../ui";
+import type { BadgeTone } from "../ui";
+import { ACTIVE_MISSION } from "../../data/dispatch";
+import type { MissionDetail, VehicleAssignment, VehicleState } from "../../types";
+
+/** Maps a vehicle state to a badge tone. */
+const STATE_TONE: Record<VehicleState, BadgeTone> = {
+  queued: "neutral",
+  transit: "emerald",
+  delivered: "sky",
+  maintenance: "rose",
+};
+
+/** Origin/destination row with a colored leading dot. */
+const RoutePoint = memo(function RoutePoint({
+  label,
+  value,
+  tone,
+}: {
+  label: string;
+  value: string;
+  tone: "origin" | "destination";
+}) {
+  return (
+    <div className="flex items-start gap-3">
+      <span
+        className={cx(
+          "mt-1 size-3 rounded-full shrink-0",
+          tone === "origin" ? "bg-neutral-900" : "bg-emerald-500"
+        )}
+      />
+      <div>
+        <SectionLabel>{label}</SectionLabel>
+        <div className="mt-0.5 text-sm font-medium">{value}</div>
+      </div>
+    </div>
+  );
+});
+
+/** One assigned-vehicle card. */
+const VehicleRow = memo(function VehicleRow({ id, kind, state }: VehicleAssignment) {
+  return (
+    <div className="flex items-center gap-3 rounded-xl ring-1 ring-black/5 px-4 py-3">
+      <div className="size-9 rounded-lg bg-neutral-100 flex items-center justify-center text-neutral-400">
+        <TruckGlyph />
+      </div>
+      <div className="flex-1">
+        <div className="text-sm font-semibold tabular-nums">{id}</div>
+        <div className="text-[11px] text-neutral-500">{kind}</div>
+      </div>
+      <Badge tone={STATE_TONE[state]}>{state}</Badge>
+    </div>
+  );
+});
+
+/** Right rail: detail view for the selected mission. */
+export function RightSidebar({ mission = ACTIVE_MISSION }: { mission?: MissionDetail }) {
+  return (
+    <div className="flex flex-col h-full overflow-y-auto">
+      {/* Header */}
+      <div className="px-6 pt-6">
+        <div className="flex items-center justify-between">
+          <SectionLabel>Mission · {mission.id}</SectionLabel>
+          <Badge>{mission.status}</Badge>
+        </div>
+        <h2 className="mt-3 text-2xl font-semibold tracking-tight">{mission.title}</h2>
+        <p className="mt-1 text-[11px] text-neutral-500 tabular-nums">{mission.meta}</p>
+      </div>
+
+      {/* Deadline */}
+      <div className="mx-6 mt-5 rounded-xl bg-neutral-50 ring-1 ring-black/5 px-4 py-3">
+        <SectionLabel>Deadline</SectionLabel>
+        <div className="mt-1 text-2xl font-semibold tabular-nums">{mission.deadline}</div>
+      </div>
+
+      {/* Route */}
+      <div className="px-6 mt-6 space-y-4">
+        <SectionLabel>Route</SectionLabel>
+        <RoutePoint label="Origin" value={mission.origin} tone="origin" />
+        <RoutePoint label="Destination" value={mission.destination} tone="destination" />
+      </div>
+
+      {/* Carrier */}
+      <div className="px-6 mt-6">
+        <SectionLabel>Carrier</SectionLabel>
+        <div className="mt-2 rounded-xl ring-1 ring-black/5 px-4 py-3">
+          <div className="text-sm font-medium">{mission.carrier.name}</div>
+          <div className="text-[11px] text-neutral-500">{mission.carrier.city}</div>
+        </div>
+      </div>
+
+      {/* Assigned vehicles */}
+      <div className="px-6 mt-6 space-y-2">
+        <SectionLabel>Assigned vehicles</SectionLabel>
+        <div className="space-y-2">
+          {mission.vehicles.map((v) => (
+            <VehicleRow key={v.id} {...v} />
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}

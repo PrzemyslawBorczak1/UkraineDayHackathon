@@ -1,7 +1,8 @@
 from datetime import datetime
 from typing import Optional
 
-from sqlalchemy import String, Integer, Float, DateTime, Text, ForeignKey
+from sqlalchemy import String, Integer, Float, Boolean, DateTime, Text, ForeignKey
+from sqlalchemy.dialects.postgresql import ARRAY
 from sqlalchemy.orm import Mapped, mapped_column
 from geoalchemy2 import Geometry
 
@@ -37,8 +38,15 @@ class Mission(Base):
     cargo_type: Mapped[str] = mapped_column(String(50))
     origin_point: Mapped[str] = mapped_column(String(50))
     origin_geom: Mapped[str] = mapped_column(Geometry("POINT", srid=4326))
+    origin_address: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     destination_point: Mapped[str] = mapped_column(String(50))
     dest_geom: Mapped[str] = mapped_column(Geometry("POINT", srid=4326))
+    dest_address: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    # Route polyline (filled later by a routing provider, e.g. Geoapify). The
+    # coordinator panel interpolates truck position along this geometry.
+    route_geom: Mapped[Optional[str]] = mapped_column(
+        Geometry("LINESTRING", srid=4326), nullable=True
+    )
     route_distance_km: Mapped[int] = mapped_column(Integer)
     weight_t: Mapped[float] = mapped_column(Float)
     volume_m3: Mapped[float] = mapped_column(Float)
@@ -50,6 +58,23 @@ class Mission(Base):
     status: Mapped[str] = mapped_column(String(20), default=MissionStatus.NEW)
     requesting_authority: Mapped[str] = mapped_column(String(100))
     special_requirement: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+
+    # Structured requirements parsed from special_requirement note.
+    # Used by the allocation engine to match against vehicle capabilities
+    # (temperature_controlled / adr_enabled / liftgate). When the note does not
+    # carry the info: temperature -> NULL, ADR/liftgate -> False.
+    required_temperature: Mapped[Optional[list[int]]] = mapped_column(
+        ARRAY(Integer), nullable=True
+    )  # [min_c, max_c], e.g. [2, 8]
+    certificate_adr: Mapped[bool] = mapped_column(Boolean, default=False)
+    liftgate: Mapped[bool] = mapped_column(Boolean, default=False)
+
+    @property
+    def temperature_range(self) -> Optional[tuple[int, int]]:
+        """Required temperature as a (min_c, max_c) tuple, or None."""
+        if self.required_temperature is None:
+            return None
+        return tuple(self.required_temperature)  # type: ignore[return-value]
 
     # Assignment tracking (filled when mission is assigned)
     assigned_vehicle_id: Mapped[Optional[str]] = mapped_column(
