@@ -7,6 +7,7 @@ from sqlalchemy import text
 
 from app.database import get_db, init_db
 from app.models import Carrier, Vehicle, Warehouse, Mission, CrisisObject, Budget
+from app.routers import driver
 
 
 @asynccontextmanager
@@ -30,6 +31,8 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+app.include_router(driver.router)
 
 
 @app.get("/")
