@@ -153,6 +153,8 @@ def calculate_score(
     vehicle: "Vehicle",
     max_distance_km: float = 1000.0,
     max_carrier_cost: float = 5000.0,
+    active_wait_hours: float = 0.0,
+    passive_wait_hours: float = 0.0,
 ) -> float:
     dist_km = vehicle.get_location_at_time(mission.available_from).distance(
         mission.origin.location
@@ -188,6 +190,16 @@ def calculate_score(
     carrier_cost = vehicle.carrier.price_per_km * mission.route_distance
     s_cost = 100 - (min(carrier_cost, max_carrier_cost) / max_carrier_cost) * 100
 
+    priority_multiplier = {
+        Priority.HIGH: 100000,
+        Priority.MEDIUM: 1000,
+        Priority.LOW: 0,
+    }
+    s_priority = priority_multiplier.get(mission.priority, 0)
+
+    penalty_active = active_wait_hours * 50.0
+    penalty_passive = passive_wait_hours * 1.0
+
     return (
         0.20 * s_dist
         + 0.20 * s_act
@@ -196,6 +208,9 @@ def calculate_score(
         + 0.10 * s_rel
         + 0.10 * s_cost
         + 0.05 * vehicle.carrier.operational_resilience
+        + s_priority
+        - penalty_active
+        - penalty_passive
     )
 
 
@@ -286,11 +301,16 @@ class Vehicle:
 
 class DailyALNSScheduler:
     def __init__(
-        self, vehicles: list[Vehicle], missions: list[Mission], budget: Budget
+        self,
+        vehicles: list[Vehicle],
+        missions: list[Mission],
+        budget: Budget,
+        max_passive_waiting_hours: float = float("inf"),
     ):
         self.vehicles = vehicles
         self.missions = missions
         self.daily_budget = budget.daily
+        self.max_passive_waiting_hours = max_passive_waiting_hours
         self._rebuild_unassigned_list()
 
     def _rebuild_unassigned_list(self):
@@ -372,6 +392,9 @@ class DailyALNSScheduler:
             hour=0, minute=0, second=0, microsecond=0
         )
 
+        best_score = -float("inf")
+        best_result = None
+
         for hour_offset in range(0, 48):
             possible_start = base_day_midnight + timedelta(hours=hour_offset)
 
@@ -419,78 +442,117 @@ class DailyALNSScheduler:
             if allocated_weight <= 0 or allocated_volume <= 0:
                 continue
 
-            score = calculate_score(mission, vehicle)
-            assignment = MissionAssignment(mission, allocated_weight, allocated_volume)
-            intervals = []
-
-            # 1. Dojazd do załadunku (jazda bez ładunku)
-            if distance_to_origin > 0.1:
-                intervals.append(
-                    TimeInterval(
-                        possible_start,
-                        arrival_at_origin,
-                        Status.IN_PROGRESS_PASSIVE,
-                        assignment,
-                        cost=0.0,
-                    )
-                )
-
-            # 2. Oczekiwanie na otwarcie magazynu załadunkowego
+            passive_wait = timedelta(0)
             if arrival_at_origin < wh_open:
-                intervals.append(
-                    TimeInterval(
-                        arrival_at_origin,
-                        wh_open,
-                        Status.PASSIVE_WAITING,
-                        assignment,
-                        cost=0.0,
-                    )
-                )
+                passive_wait = wh_open - arrival_at_origin
+                if passive_wait.total_seconds() / 3600 > self.max_passive_waiting_hours:
+                    continue
 
-            # 3. Transport właściwy (jazda z ładunkiem)
-            intervals.append(
-                TimeInterval(
-                    loading_start,
-                    delivery_arrival,
-                    Status.IN_PROGRESS_ACTIVE,
-                    assignment,
-                    cost=single_trip_cost,
-                )
-            )
-
-            # 4. Oczekiwanie z ładunkiem na otwarcie rozładunku
+            active_wait = timedelta(0)
             if delivery_arrival < wh_dest_open:
-                intervals.append(
-                    TimeInterval(
-                        delivery_arrival,
-                        wh_dest_open,
-                        Status.ACTIVE_WAITING,
-                        assignment,
-                        cost=0.0,
-                    )
-                )
+                active_wait = wh_dest_open - delivery_arrival
 
-            # 5. Rozładunek (nowy stan UNLOADING)
-            if delivery_start < delivery_end:
-                intervals.append(
-                    TimeInterval(
-                        delivery_start,
-                        delivery_end,
-                        Status.UNLOADING,
-                        assignment,
-                        cost=0.0,
-                    )
-                )
+            active_wait_hours = active_wait.total_seconds() / 3600.0
+            passive_wait_hours = passive_wait.total_seconds() / 3600.0
 
-            return (
-                score,
-                intervals,
-                single_trip_cost,
-                allocated_weight,
-                allocated_volume,
+            score = calculate_score(
+                mission,
+                vehicle,
+                active_wait_hours=active_wait_hours,
+                passive_wait_hours=passive_wait_hours,
             )
 
-        return None
+            if score > best_score:
+                best_score = score
+                assignment = MissionAssignment(
+                    mission, allocated_weight, allocated_volume
+                )
+                intervals = []
+
+                if distance_to_origin > 0.1:
+                    intervals.append(
+                        TimeInterval(
+                            possible_start,
+                            arrival_at_origin,
+                            Status.IN_PROGRESS_PASSIVE,
+                            assignment,
+                            cost=0.0,
+                        )
+                    )
+
+                if arrival_at_origin < wh_open:
+                    intervals.append(
+                        TimeInterval(
+                            arrival_at_origin,
+                            wh_open,
+                            Status.PASSIVE_WAITING,
+                            assignment,
+                            cost=0.0,
+                        )
+                    )
+
+                intervals.append(
+                    TimeInterval(
+                        loading_start,
+                        delivery_arrival,
+                        Status.IN_PROGRESS_ACTIVE,
+                        assignment,
+                        cost=single_trip_cost,
+                    )
+                )
+
+                if delivery_arrival < wh_dest_open:
+                    intervals.append(
+                        TimeInterval(
+                            delivery_arrival,
+                            wh_dest_open,
+                            Status.ACTIVE_WAITING,
+                            assignment,
+                            cost=0.0,
+                        )
+                    )
+
+                if delivery_start < delivery_end:
+                    intervals.append(
+                        TimeInterval(
+                            delivery_start,
+                            delivery_end,
+                            Status.UNLOADING,
+                            assignment,
+                            cost=0.0,
+                        )
+                    )
+
+                best_result = (
+                    best_score,
+                    intervals,
+                    single_trip_cost,
+                    allocated_weight,
+                    allocated_volume,
+                )
+
+        return best_result
+
+    def _fill_gaps(self, vehicle: Vehicle):
+        if not vehicle.timeSchedule:
+            return
+        sorted_iv = sorted(vehicle.timeSchedule, key=lambda x: x.start)
+        new_intervals = []
+        for i in range(len(sorted_iv) - 1):
+            current_end = sorted_iv[i].end
+            next_start = sorted_iv[i + 1].start
+            if next_start > current_end:
+                gap_interval = TimeInterval(
+                    current_end,
+                    next_start,
+                    Status.PASSIVE_WAITING,
+                    mission_assignment=None,
+                    cost=0.0,
+                )
+                new_intervals.append(gap_interval)
+        if new_intervals:
+            vehicle.timeSchedule.extend(new_intervals)
+            vehicle.timeSchedule.sort(key=lambda x: x.start)
 
     def create_initial_solution(
         self,
@@ -541,7 +603,7 @@ class DailyALNSScheduler:
                             best_vehicle = vehicle
 
                     if best_vehicle and best_result:
-                        _, intervals, trip_cost, alloc_w, alloc_v = best_result
+                        score, intervals, trip_cost, alloc_w, alloc_v = best_result
 
                         mission.remaining_weight -= alloc_w
                         mission.remaining_volume -= alloc_v
@@ -567,6 +629,7 @@ class DailyALNSScheduler:
                             mission.assigned_vehicles.append(best_vehicle.id)
 
                         best_vehicle.add_intervals(intervals)
+                        self._fill_gaps(best_vehicle)
 
                         mission.mark_closed_if_complete()
                         if mission.state == State.CLOSED:
@@ -579,28 +642,59 @@ class DailyALNSScheduler:
 
             current_date = next_date
 
-    def destroy_worst_assignments(self, num_to_remove: int, simulation_time: datetime):
-        all_assignments = []
+        for v in self.vehicles:
+            self._fill_gaps(v)
 
+    def destroy_worst_assignments(self, num_to_remove: int, simulation_time: datetime):
+        assignment_info = {}
         for vehicle in self.vehicles:
             for interval in vehicle.timeSchedule:
-                if (
-                    interval.status == Status.IN_PROGRESS_ACTIVE
-                    and interval.mission_assignment
-                    and interval.start >= simulation_time
-                ):
-                    score = calculate_score(
-                        interval.mission_assignment.mission, vehicle
-                    )
-                    entry = (score, interval.mission_assignment, vehicle, interval)
-                    if entry not in all_assignments:
-                        all_assignments.append(entry)
+                if interval.mission_assignment and interval.start >= simulation_time:
+                    assignment = interval.mission_assignment
+                    key = (assignment.mission.id, vehicle.id)
+                    if key not in assignment_info:
+                        assignment_info[key] = {
+                            "assignment": assignment,
+                            "vehicle": vehicle,
+                            "active_wait_sec": 0.0,
+                            "passive_wait_sec": 0.0,
+                            "intervals": [],
+                        }
+                    if interval.status == Status.ACTIVE_WAITING:
+                        assignment_info[key]["active_wait_sec"] += (
+                            interval.end - interval.start
+                        ).total_seconds()
+                    elif interval.status == Status.PASSIVE_WAITING:
+                        assignment_info[key]["passive_wait_sec"] += (
+                            interval.end - interval.start
+                        ).total_seconds()
+                    if interval.status == Status.IN_PROGRESS_ACTIVE:  # <-- POPRAWIONE
+                        assignment_info[key]["intervals"].append(interval)
+
+        if not assignment_info:
+            return
+
+        all_assignments = []
+        for key, data in assignment_info.items():
+            mission = data["assignment"].mission
+            vehicle = data["vehicle"]
+            active_hours = data["active_wait_sec"] / 3600.0
+            passive_hours = data["passive_wait_sec"] / 3600.0
+            score = calculate_score(
+                mission,
+                vehicle,
+                active_wait_hours=active_hours,
+                passive_wait_hours=passive_hours,
+            )
+            all_assignments.append(
+                (score, data["assignment"], data["vehicle"], data["intervals"])
+            )
 
         all_assignments.sort(key=lambda x: x[0])
 
-        removed_count = 0
-        for score, assignment, vehicle, delivery_interval in all_assignments:
-            if removed_count >= num_to_remove:
+        removed = 0
+        for score, assignment, vehicle, intervals in all_assignments:
+            if removed >= num_to_remove:
                 break
 
             mission = assignment.mission
@@ -620,7 +714,10 @@ class DailyALNSScheduler:
             mission.remaining_volume = min(
                 mission.volume, mission.remaining_volume + assignment.allocated_volume
             )
-            mission.cost = max(0.0, mission.cost - delivery_interval.cost)
+            mission.cost = max(
+                0.0,
+                mission.cost - sum(intv.cost for intv in intervals if intv.cost > 0),
+            )
 
             if mission.remaining_weight >= mission.weight - 0.01:
                 mission.state = State.CREATED
@@ -632,7 +729,10 @@ class DailyALNSScheduler:
             if mission not in self.unassigned_missions:
                 self.unassigned_missions.append(mission)
 
-            removed_count += 1
+            removed += 1
+
+        for v in self.vehicles:
+            self._fill_gaps(v)
 
     def repair_greedy(self, start_date: datetime, end_date: datetime):
         self._rebuild_unassigned_list()
@@ -659,15 +759,16 @@ class DailyALNSScheduler:
 
 
 def handle_vehicle_breakdown(
-    vehicle: Vehicle, simulation_time: datetime, scheduler: DailyALNSScheduler
+    vehicle: Vehicle,
+    simulation_time: datetime,
+    scheduler: DailyALNSScheduler,
+    end_date: datetime,
 ):
     for interval in vehicle.timeSchedule[:]:
-        # Usuwamy tylko przyszłe interwały (po czasie awarii)
         if interval.start >= simulation_time:
             mission_assignment = interval.mission_assignment
             if mission_assignment:
                 mission = mission_assignment.mission
-                # Cofnij alokację ładunku
                 mission.remaining_weight = min(
                     mission.weight,
                     mission.remaining_weight + mission_assignment.allocated_weight,
@@ -678,17 +779,12 @@ def handle_vehicle_breakdown(
                 )
                 if vehicle.id in mission.assigned_vehicles:
                     mission.assigned_vehicles.remove(vehicle.id)
-                # Jeśli misja była w toku, mogła mieć zarezerwowany budżet – warto go zostawić,
-                # bo misja nadal jest IN_PROGRESS (budget_commitment_date nie zmienia się).
             vehicle.timeSchedule.remove(interval)
 
     vehicle.is_broken = True
     vehicle.disruption_location = vehicle.get_location_at_time(simulation_time)
-    # Opcjonalnie: vehicle.locked_until = simulation_time + timedelta(hours=8)  # szacowany czas naprawy
-
-    # Odbuduj listę nieprzypisanych misji i zaplanuj na nowo
     scheduler._rebuild_unassigned_list()
-    scheduler.run_alns(iterations=5, start_date=simulation_time, end_date=...)
+    scheduler.run_alns(iterations=5, start_date=simulation_time, end_date=end_date)
 
 
 def print_vehicle_working_hours(vehicle: Vehicle):
@@ -835,7 +931,7 @@ if __name__ == "__main__":
         wh2,
         Priority.LOW,
         datetime.now(),
-        datetime.now() + timedelta(days=3),
+        datetime.now() + timedelta(days=7),
         weight=60.0,
         volume=2.0,
         route_distance=200.0,
