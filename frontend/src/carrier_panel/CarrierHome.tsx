@@ -149,7 +149,7 @@ export function CarrierHome({ profile, onLogout }: { profile: CarrierProfile; on
           />
         )}
 
-        {tab === "missions" && <MissionsSection carrierId={prof.id} />}
+        {tab === "missions" && <MissionsSection carrierId={prof.id} vehicles={vehicles} />}
       </div>
 
       {showProfile && (
