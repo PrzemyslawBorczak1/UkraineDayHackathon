@@ -1,8 +1,155 @@
-import { type FormEvent, useState } from "react";
+import { type FormEvent, useState, useEffect, useRef } from "react";
+import { MapContainer, TileLayer, Marker, Polyline, useMap } from "react-leaflet";
+import L from "leaflet";
 import { SectionLabel, CtaPill, cx } from "../components/ui";
 import { CARGO_TYPES, VEHICLE_TYPES, PRIORITIES } from "../data/dispatch";
 import { useCreateMission, type MissionCreatePayload } from "../hooks/useCreateMission";
 import { toInputValue } from "../lib/time";
+
+// ── Geoapify autocomplete ─────────────────────────────────────────────────
+
+const GEOAPIFY_KEY = import.meta.env.VITE_GEOAPIFY_API_KEY as string;
+
+type GeoSuggestion = { label: string; lat: number; lon: number };
+
+function useGeoapify(query: string) {
+  const [suggestions, setSuggestions] = useState<GeoSuggestion[]>([]);
+  const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    if (query.length < 3) { setSuggestions([]); return; }
+    if (timer.current) clearTimeout(timer.current);
+    timer.current = setTimeout(async () => {
+      try {
+        const url = `https://api.geoapify.com/v1/geocode/autocomplete?text=${encodeURIComponent(query)}&limit=5&apiKey=${GEOAPIFY_KEY}`;
+        const res = await fetch(url);
+        const json = await res.json();
+        setSuggestions(
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          (json.features ?? []).map((f: any) => ({
+            label: f.properties.formatted,
+            lat: f.properties.lat,
+            lon: f.properties.lon,
+          }))
+        );
+      } catch { setSuggestions([]); }
+    }, 300);
+    return () => { if (timer.current) clearTimeout(timer.current); };
+  }, [query]);
+
+  return { suggestions, clear: () => setSuggestions([]) };
+}
+
+function LocationInput({
+  value,
+  onChange,
+  onResolve,
+  placeholder,
+}: {
+  value: string;
+  onChange: (v: string) => void;
+  onResolve: (lat: number, lon: number) => void;
+  placeholder?: string;
+}) {
+  const { suggestions, clear } = useGeoapify(value);
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => { setOpen(suggestions.length > 0); }, [suggestions]);
+
+  useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, []);
+
+  return (
+    <div ref={ref} className="relative">
+      <input
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        placeholder={placeholder}
+        className={inputCls}
+        autoComplete="off"
+      />
+      {open && (
+        <ul className="absolute z-50 left-0 right-0 top-full mt-1 bg-white border border-neutral-200 rounded-lg shadow-lg overflow-hidden text-sm">
+          {suggestions.map((s) => (
+            <li
+              key={`${s.lat}-${s.lon}`}
+              className="px-3 py-2 cursor-pointer hover:bg-neutral-100 truncate"
+              onMouseDown={(e) => {
+                e.preventDefault();
+                onChange(s.label);
+                onResolve(s.lat, s.lon);
+                clear();
+                setOpen(false);
+              }}
+            >
+              {s.label}
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
+}
+
+// ── Route map preview ────────────────────────────────────────────────────
+
+const markerIcon = (color: string) =>
+  L.divIcon({
+    className: "",
+    html: `<div style="width:12px;height:12px;border-radius:50%;background:${color};border:2px solid white;box-shadow:0 1px 4px rgba(0,0,0,.4)"></div>`,
+    iconSize: [12, 12],
+    iconAnchor: [6, 6],
+  });
+
+function FitBounds({ positions }: { positions: [number, number][] }) {
+  const map = useMap();
+  useEffect(() => {
+    if (positions.length === 2) {
+      map.fitBounds(L.latLngBounds(positions), { padding: [32, 32] });
+    } else if (positions.length === 1) {
+      map.setView(positions[0], 10);
+    }
+  }, [map, positions]);
+  return null;
+}
+
+function RouteMap({ originLat, originLng, destLat, destLng }: { originLat: string; originLng: string; destLat: string; destLng: string }) {
+  const oLat = parseFloat(originLat), oLng = parseFloat(originLng);
+  const dLat = parseFloat(destLat), dLng = parseFloat(destLng);
+  const hasOrigin = !isNaN(oLat) && !isNaN(oLng);
+  const hasDest = !isNaN(dLat) && !isNaN(dLng);
+  const positions: [number, number][] = [
+    ...(hasOrigin ? [[oLat, oLng] as [number, number]] : []),
+    ...(hasDest ? [[dLat, dLng] as [number, number]] : []),
+  ];
+
+  return (
+    <MapContainer
+      center={positions[0] ?? [50.06, 19.94]}
+      zoom={6}
+      scrollWheelZoom={false}
+      className="w-full h-56 rounded-xl z-0"
+      style={{ zIndex: 0 }}
+    >
+      <TileLayer
+        url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+        attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
+      />
+      {hasOrigin && <Marker position={[oLat, oLng]} icon={markerIcon("#10b981")} />}
+      {hasDest && <Marker position={[dLat, dLng]} icon={markerIcon("#ef4444")} />}
+      {hasOrigin && hasDest && (
+        <Polyline positions={[[oLat, oLng], [dLat, dLng]]} color="#6366f1" weight={2} dashArray="6 4" />
+      )}
+      <FitBounds positions={positions} />
+    </MapContainer>
+  );
+}
 
 // ── Reusable field wrappers ────────────────────────────────────────────────
 
@@ -93,11 +240,11 @@ function validate(f: FormState): Errors {
   const errors: Errors = {};
   if (!f.cargo_type) errors.cargo_type = "Required";
   if (!f.origin_point.trim()) errors.origin_point = "Required";
-  if (f.origin_lat === "" || isNaN(Number(f.origin_lat))) errors.origin_lat = "Valid number required";
-  if (f.origin_lng === "" || isNaN(Number(f.origin_lng))) errors.origin_lng = "Valid number required";
+  else if (f.origin_lat === "" || isNaN(Number(f.origin_lat)) || f.origin_lng === "" || isNaN(Number(f.origin_lng)))
+    errors.origin_point = "Select a location from the dropdown";
   if (!f.destination_point.trim()) errors.destination_point = "Required";
-  if (f.dest_lat === "" || isNaN(Number(f.dest_lat))) errors.dest_lat = "Valid number required";
-  if (f.dest_lng === "" || isNaN(Number(f.dest_lng))) errors.dest_lng = "Valid number required";
+  else if (f.dest_lat === "" || isNaN(Number(f.dest_lat)) || f.dest_lng === "" || isNaN(Number(f.dest_lng)))
+    errors.destination_point = "Select a location from the dropdown";
   if (!f.route_distance_km || Number(f.route_distance_km) <= 0) errors.route_distance_km = "Must be > 0";
   if (!f.weight_t || Number(f.weight_t) <= 0) errors.weight_t = "Must be > 0";
   if (!f.volume_m3 || Number(f.volume_m3) <= 0) errors.volume_m3 = "Must be > 0";
@@ -216,28 +363,31 @@ export function NewMissionPage({ onBack }: { onBack: () => void }) {
             <SectionLabel>Route</SectionLabel>
             <div className="grid grid-cols-2 gap-4">
               <Field label="Origin location" error={errors.origin_point}>
-                <TextInput placeholder="e.g. Kraków Hub 1" value={form.origin_point} onChange={set("origin_point")} />
+                <LocationInput
+                  value={form.origin_point}
+                  onChange={(v) => setForm((p) => ({ ...p, origin_point: v }))}
+                  onResolve={(lat, lon) => setForm((p) => ({ ...p, origin_lat: String(lat), origin_lng: String(lon) }))}
+                  placeholder="e.g. Kraków Hub 1"
+                />
               </Field>
               <Field label="Route distance (km)" error={errors.route_distance_km}>
                 <NumberInput placeholder="e.g. 450" value={form.route_distance_km} onChange={set("route_distance_km")} />
               </Field>
-              <Field label="Origin lat" error={errors.origin_lat}>
-                <NumberInput placeholder="50.0647" value={form.origin_lat} onChange={set("origin_lat")} />
-              </Field>
-              <Field label="Origin lng" error={errors.origin_lng}>
-                <NumberInput placeholder="19.945" value={form.origin_lng} onChange={set("origin_lng")} />
-              </Field>
               <Field label="Destination location" error={errors.destination_point}>
-                <TextInput placeholder="e.g. Lviv Hub 1" value={form.destination_point} onChange={set("destination_point")} />
-              </Field>
-              <div /> {/* spacer */}
-              <Field label="Destination lat" error={errors.dest_lat}>
-                <NumberInput placeholder="49.8397" value={form.dest_lat} onChange={set("dest_lat")} />
-              </Field>
-              <Field label="Destination lng" error={errors.dest_lng}>
-                <NumberInput placeholder="24.0297" value={form.dest_lng} onChange={set("dest_lng")} />
+                <LocationInput
+                  value={form.destination_point}
+                  onChange={(v) => setForm((p) => ({ ...p, destination_point: v }))}
+                  onResolve={(lat, lon) => setForm((p) => ({ ...p, dest_lat: String(lat), dest_lng: String(lon) }))}
+                  placeholder="e.g. Lviv Hub 1"
+                />
               </Field>
             </div>
+            <RouteMap
+              originLat={form.origin_lat}
+              originLng={form.origin_lng}
+              destLat={form.dest_lat}
+              destLng={form.dest_lng}
+            />
           </section>
 
           {/* Scheduling & priority */}
