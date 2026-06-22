@@ -29,7 +29,7 @@ def init_db():
     # Import models so Base.metadata knows about them
     from app.models import (
         Carrier, Vehicle, Warehouse, Mission,
-        PublicVerification, CrisisObject, Budget
+        PublicVerification, CrisisObject, Budget, Task
     )
     from app.events import MissionEvent
 
