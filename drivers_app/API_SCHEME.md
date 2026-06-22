@@ -1,7 +1,11 @@
 # Crisis Logistics – Backend API Scheme
 
-> REST API specification for the Drivers App.  
-> Base URL: `https://api.crisis-logistics.example.com/api/v1`
+> REST API specification for the Drivers App.
+> Base URL: `/api/v1`
+
+A **Task** is the unit of work a driver sees: a (part of a) mission assigned to
+one vehicle. Missions are divisible — one mission can be split across several
+tasks/vehicles. Task endpoints implicitly update the parent mission's state.
 
 ---
 
@@ -9,13 +13,12 @@
 
 ### `POST /auth/login`
 
-Authenticate a driver and receive a JWT token.
+Authenticate a driver by vehicle id (MVP — no password, no JWT).
 
 **Request Body:**
 ```json
 {
-  "vehicle_id": "TRK-001",
-  "password": "secret123"
+  "vehicle_id": "V0001"
 }
 ```
 
@@ -23,8 +26,7 @@ Authenticate a driver and receive a JWT token.
 ```json
 {
   "success": true,
-  "token": "eyJhbGciOiJIUzI1NiIs...",
-  "vehicle_id": "TRK-001"
+  "vehicle_id": "V0001"
 }
 ```
 
@@ -34,11 +36,6 @@ Authenticate a driver and receive a JWT token.
   "success": false,
   "error_message": "Invalid credentials"
 }
-```
-
-**Headers for subsequent requests:**
-```
-Authorization: Bearer <token>
 ```
 
 ---
@@ -52,69 +49,80 @@ Retrieve details for a specific vehicle.
 **Response `200 OK`:**
 ```json
 {
-  "vehicle_id": "TRK-001",
-  "type": "Heavy Truck (Cooler)",
-  "weight": 8000,
-  "payload": 50000,
-  "volume": 7000,
-  "operational_range": 10000,
-  "features": ["Temperature control", "GPS Tracking"],
-  "restrictions": ["Can't park in public places", "Can't enter Chechia"]
+  "vehicle_id": "V0001",
+  "type": "Refrigerated semi",
+  "weight": 40,
+  "payload": 24,
+  "volume": 90,
+  "operational_range": 1200,
+  "features": ["Temperature control", "Liftgate"],
+  "restrictions": ["No city centre"]
 }
 ```
 
 ---
 
-## Missions
+## Tasks
 
-### `GET /vehicles/{vehicleId}/missions`
+### `GET /vehicles/{vehicleId}/tasks`
 
-Retrieve all missions assigned to a vehicle.
+Retrieve all tasks assigned to a vehicle. Fields not yet stored on the task
+(cargo, weight, volume, times, special requirements) are mapped from the parent
+mission for now.
 
 **Response `200 OK`:**
 ```json
 [
   {
-    "id": "M-001",
+    "id": 1,
+    "mission_id": "M0001",
     "cargo_type": "Food",
     "start_time": "2026-06-22T16:00:00Z",
     "end_time": "2026-06-22T22:00:00Z",
     "origin": "Warszawa",
-    "destination": "Kijów",
-    "weight": 20000,
-    "volume": 4000,
-    "special_requirements": ["Temperature has to be kept at 2-8 °C"],
-    "unloading_wait_minutes": 45,
+    "destination": "Opole",
+    "weight": 20,
+    "volume": 40,
+    "special_requirements": ["Temperature 2-8°C required"],
+    "unloading_wait_minutes": null,
     "is_current": true
   },
   {
-    "id": "M-002",
+    "id": 2,
+    "mission_id": "M0002",
     "cargo_type": "Medicine",
     "start_time": "2026-06-23T07:00:00Z",
     "end_time": "2026-06-23T13:00:00Z",
     "origin": "Łódź",
-    "destination": "Lwów",
-    "weight": 2500,
-    "volume": 800,
-    "special_requirements": ["Dry storage only"],
-    "unloading_wait_minutes": 60,
+    "destination": "Nysa",
+    "weight": 2.5,
+    "volume": 8,
+    "special_requirements": [],
+    "unloading_wait_minutes": null,
     "is_current": false
   }
 ]
 ```
 
+### `PATCH /tasks/{taskId}`
+
+Mark a task as finished (delivered). Implicitly advances the parent mission's
+state (`driver_delivered`). MVP — no body.
+
+**Response `200 OK`:** the updated task (same shape as the list item above).
+
 ---
 
 ## Incidents
 
-### `POST /missions/{missionId}/incidents`
+### `POST /tasks/{taskId}/incidents`
 
-Report an incident during a mission.
+Report an incident on a task. Implicitly drives the parent mission's state
+(`endMission` → delivered, `delay` → delay reported) through the event log.
 
 **Request Body:**
 ```json
 {
-  "mission_id": "M-001",
   "type": "delay",
   "delay_minutes": 30,
   "description": "Road blocked due to fallen tree",
@@ -124,7 +132,6 @@ Report an incident during a mission.
 
 | Field           | Type     | Required | Notes                                      |
 |-----------------|----------|----------|--------------------------------------------|
-| `mission_id`    | `string` | ✅       | ID of the affected mission                 |
 | `type`          | `string` | ✅       | `"endMission"` or `"delay"`                |
 | `delay_minutes` | `int`    | ❌       | Required only when `type` is `"delay"`     |
 | `description`   | `string` | ❌       | Free-text description of the incident      |
@@ -134,7 +141,8 @@ Report an incident during a mission.
 ```json
 {
   "id": "INC-001",
-  "mission_id": "M-001",
+  "task_id": 1,
+  "mission_id": "M0001",
   "type": "delay",
   "delay_minutes": 30,
   "description": "Road blocked due to fallen tree",
@@ -146,12 +154,13 @@ Report an incident during a mission.
 
 ## Error Responses
 
-All error responses follow a consistent format:
+All error responses (except `POST /auth/login`, which returns its own
+`success`/`error_message` shape) follow a consistent format:
 
 ```json
 {
   "error": "Not Found",
-  "message": "Mission M-999 does not exist",
+  "message": "Task 999 does not exist",
   "status_code": 404
 }
 ```
