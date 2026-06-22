@@ -1,21 +1,7 @@
-import { useEffect, useState } from "react";
+import { StatisticsPage } from "./pages/StatisticsPage";
 
 function App() {
-  const [status, setStatus] = useState("checking...");
-
-  useEffect(() => {
-    fetch("http://localhost:8000/api/health")
-      .then((res) => res.json())
-      .then((data) => setStatus(data.status))
-      .catch(() => setStatus("backend unreachable"));
-  }, []);
-
-  return (
-    <div style={{ fontFamily: "sans-serif", padding: 32 }}>
-      <h1>UkraineDayHackathon</h1>
-      <p>Backend health: {status}</p>
-    </div>
-  );
+  return <StatisticsPage />;
 }
 
 export default App;
