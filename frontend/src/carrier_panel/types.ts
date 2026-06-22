@@ -118,6 +118,24 @@ export type CarrierSummary = {
   source: string;
 };
 
+export type Mission = {
+  id: string;
+  carrier_id: string;
+  title: string;
+  status: string;           // "Active" | "Upcoming" | "Completed"
+  priority: string;         // "Critical" | "High" | "Normal"
+  cargo_type: string;
+  origin_city: string;
+  destination_city: string;
+  assigned_vehicle_ids: string[];
+  assigned_warehouse_id: string | null;
+  start_date: string;       // YYYY-MM-DD
+  end_date: string;
+  coordinator: string;
+  distance_km: number;
+  notes: string | null;
+};
+
 export type RegisterPayload = {
   name: string;
   tax_id: string;

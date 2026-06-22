@@ -1,6 +1,6 @@
 import type {
   CarrierProfile, CarrierSummary, RegisterPayload, CompanyUpdate,
-  Vehicle, VehicleCreate, Warehouse, WarehouseCreate,
+  Vehicle, VehicleCreate, Warehouse, WarehouseCreate, Mission,
 } from "./types";
 
 // The carrier panel runs as its own backend on port 8001 (see
@@ -86,3 +86,8 @@ export function updateCompany(carrierId: string, payload: CompanyUpdate): Promis
     body: JSON.stringify(payload),
   }).then((r) => json<CarrierProfile>(r));
 }
+
+export function getMissions(carrierId: string): Promise<Mission[]> {
+  return fetch(`${BASE}/api/carriers/${carrierId}/missions`).then((r) => json<Mission[]>(r));
+}
+

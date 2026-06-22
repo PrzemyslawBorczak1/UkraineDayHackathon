@@ -6,6 +6,7 @@ import { Modal } from "./Modal";
 import { CompanyForm } from "./CompanyForm";
 import { VehiclesSection } from "./VehiclesSection";
 import { WarehousesSection } from "./WarehousesSection";
+import { MissionsSection } from "./MissionsSection";
 import { updateCompany } from "./api";
 
 function Row({ label, value, chip }: { label: string; value?: React.ReactNode; chip?: React.ReactNode }) {
@@ -28,7 +29,7 @@ function companyForm(p: CarrierProfile): CompanyUpdate {
   };
 }
 
-type Tab = "overview" | "fleet" | "warehouses";
+type Tab = "overview" | "fleet" | "warehouses" | "missions";
 
 export function CarrierHome({ profile, onLogout }: { profile: CarrierProfile; onLogout: () => void }) {
   const [tab, setTab] = useState<Tab>("overview");
@@ -78,6 +79,7 @@ export function CarrierHome({ profile, onLogout }: { profile: CarrierProfile; on
           <button className={`cp-tab ${tab === "overview" ? "active" : ""}`} onClick={() => setTab("overview")}>Overview</button>
           <button className={`cp-tab ${tab === "fleet" ? "active" : ""}`} onClick={() => setTab("fleet")}>Fleet<span className="count">{vehicles.length}</span></button>
           <button className={`cp-tab ${tab === "warehouses" ? "active" : ""}`} onClick={() => setTab("warehouses")}>Warehouses<span className="count">{warehouses.length}</span></button>
+          <button className={`cp-tab ${tab === "missions" ? "active" : ""}`} onClick={() => setTab("missions")}>Missions</button>
         </div>
 
         {tab === "overview" && (
@@ -146,6 +148,8 @@ export function CarrierHome({ profile, onLogout }: { profile: CarrierProfile; on
             onAdded={(x) => setWarehouses(upsert(x))} onUpdated={(x) => setWarehouses(upsert(x))}
           />
         )}
+
+        {tab === "missions" && <MissionsSection carrierId={prof.id} />}
       </div>
 
       {showProfile && (

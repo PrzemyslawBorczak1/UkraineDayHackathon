@@ -173,3 +173,22 @@ class CarrierSummary(BaseModel):
     tax_id: str
     status: str
     source: str
+
+
+class Mission(BaseModel):
+    """A logistics mission assigned to a carrier by a coordinator."""
+    id: str
+    carrier_id: str
+    title: str
+    status: str               # "Active" | "Upcoming" | "Completed"
+    priority: str             # "Critical" | "High" | "Normal"
+    cargo_type: str
+    origin_city: str
+    destination_city: str
+    assigned_vehicle_ids: list[str] = Field(default_factory=list)
+    assigned_warehouse_id: Optional[str] = None
+    start_date: str           # YYYY-MM-DD
+    end_date: str             # YYYY-MM-DD
+    coordinator: str
+    distance_km: int
+    notes: Optional[str] = None

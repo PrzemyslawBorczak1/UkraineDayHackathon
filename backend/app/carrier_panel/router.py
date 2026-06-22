@@ -2,10 +2,12 @@
 from fastapi import APIRouter, HTTPException
 
 from app.carrier_panel import store
+from app.carrier_panel import missions as missions_store
 from app.carrier_panel.schemas import (
     CarrierProfile,
     CarrierSummary,
     CompanyUpdate,
+    Mission,
     RegisterRequest,
     Vehicle,
     VehicleCreate,
@@ -79,3 +81,11 @@ def update_warehouse(carrier_id: str, warehouse_id: str, data: WarehouseUpdate):
     if warehouse is None:
         raise HTTPException(status_code=404, detail="Carrier or warehouse not found")
     return warehouse
+
+
+@router.get("/{carrier_id}/missions", response_model=list[Mission])
+def get_missions(carrier_id: str):
+    """Missions assigned to this carrier by coordinators (read-only)."""
+    if store.get_company(carrier_id) is None:
+        raise HTTPException(status_code=404, detail=f"Carrier {carrier_id} not found")
+    return missions_store.get_missions(carrier_id)
