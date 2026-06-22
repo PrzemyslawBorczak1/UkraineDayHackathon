@@ -213,6 +213,39 @@ select.cp-input { appearance: none; background-image:
 .cp-mini { padding: 7px 26px 7px 10px; font-size: 13px; }
 .cp-btn-sm { padding: 7px 14px; font-size: 13px; }
 
+/* ---- Clickable items ---- */
+.cp-item.clickable { cursor: pointer; transition: border-color 0.12s, box-shadow 0.12s; }
+.cp-item.clickable:hover { border-color: #cdd2db; box-shadow: var(--cp-shadow); }
+
+/* ---- Icon button (profile) ---- */
+.cp-bar-actions { display: flex; align-items: center; gap: 8px; }
+.cp-iconbtn {
+  width: 36px; height: 36px; border-radius: 10px; border: 1px solid var(--cp-line);
+  background: #fff; color: var(--cp-ink-soft); cursor: pointer; display: grid; place-items: center;
+  transition: all 0.12s; font-family: inherit;
+}
+.cp-iconbtn:hover { border-color: #cdd2db; background: #fcfcfd; }
+
+/* ---- Modal ---- */
+.cp-overlay {
+  position: fixed; inset: 0; background: rgba(15, 23, 42, 0.45);
+  backdrop-filter: blur(2px); display: grid; place-items: center; padding: 20px; z-index: 50;
+}
+.cp-dialog {
+  background: var(--cp-card); border-radius: var(--cp-radius); box-shadow: var(--cp-shadow-lg);
+  width: 100%; max-width: 640px; max-height: 90vh; display: flex; flex-direction: column; overflow: hidden;
+}
+.cp-dialog-head {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 16px 22px; border-bottom: 1px solid var(--cp-line);
+}
+.cp-dialog-head h3 { margin: 0; font-size: 17px; font-weight: 650; letter-spacing: -0.01em; }
+.cp-dialog-body { padding: 22px; overflow: auto; }
+.cp-x { border: none; background: transparent; font-size: 20px; line-height: 1; color: var(--cp-muted);
+  cursor: pointer; padding: 2px 6px; border-radius: 6px; }
+.cp-x:hover { color: var(--cp-ink); background: var(--cp-line-soft); }
+.cp-dialog-actions { display: flex; gap: 10px; margin-top: 18px; }
+
 @media (max-width: 620px) {
   .cp-grid { grid-template-columns: 1fr; }
   .cp-container { padding: 20px 16px 48px; }

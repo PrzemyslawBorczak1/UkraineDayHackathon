@@ -105,8 +105,47 @@ class WarehouseCreate(BaseModel):
     activation_time_hours: int = Field(..., ge=0, le=72)
 
 
-class AvailabilityUpdate(BaseModel):
-    availability_status: str
+class VehicleUpdate(BaseModel):
+    """Partial vehicle edit — only provided fields are applied."""
+    vehicle_type: Optional[str] = None
+    gross_vehicle_weight_t: Optional[float] = None
+    payload_t: Optional[float] = None
+    volume_m3: Optional[int] = None
+    temperature_controlled: Optional[bool] = None
+    adr_enabled: Optional[bool] = None
+    liftgate: Optional[bool] = None
+    current_city: Optional[str] = None
+    activation_time_hours: Optional[int] = None
+    operational_range_km: Optional[int] = None
+    restriction_note: Optional[str] = None
+    availability_status: Optional[str] = None
+
+
+class WarehouseUpdate(BaseModel):
+    """Partial warehouse edit — only provided fields are applied."""
+    name: Optional[str] = None
+    city: Optional[str] = None
+    voivodeship: Optional[str] = None
+    warehouse_type: Optional[str] = None
+    area_m2: Optional[int] = None
+    dock_doors: Optional[int] = None
+    cold_storage: Optional[bool] = None
+    on_site_security: Optional[bool] = None
+    operating_hours: Optional[str] = None
+    available_capacity_pct: Optional[int] = None
+    activation_time_hours: Optional[int] = None
+
+
+class CompanyUpdate(BaseModel):
+    """Editable declared company fields (does not re-run verification)."""
+    name: Optional[str] = None
+    hq_city: Optional[str] = None
+    voivodeship: Optional[str] = None
+    activity_type: Optional[str] = None
+    operating_region: Optional[str] = None
+    preferred_contact_channel: Optional[str] = None
+    declared_activation_time_hours: Optional[int] = None
+    cost_per_km: Optional[float] = None
 
 
 class CarrierProfile(BaseModel):

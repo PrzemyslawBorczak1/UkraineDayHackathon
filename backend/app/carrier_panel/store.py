@@ -268,12 +268,34 @@ def add_warehouse(carrier_id: str, data: WarehouseCreate) -> Optional[Warehouse]
     return warehouse
 
 
-def set_vehicle_availability(carrier_id: str, vehicle_id: str, status: str) -> Optional[Vehicle]:
+def update_vehicle(carrier_id: str, vehicle_id: str, changes: dict) -> Optional[Vehicle]:
     company = _COMPANIES.get(carrier_id)
     if company is None:
         return None
     for v in company.vehicles:
         if v.id == vehicle_id:
-            v.availability_status = status
+            for key, value in changes.items():
+                setattr(v, key, value)
             return v
     return None
+
+
+def update_warehouse(carrier_id: str, warehouse_id: str, changes: dict) -> Optional[Warehouse]:
+    company = _COMPANIES.get(carrier_id)
+    if company is None:
+        return None
+    for w in company.warehouses:
+        if w.id == warehouse_id:
+            for key, value in changes.items():
+                setattr(w, key, value)
+            return w
+    return None
+
+
+def update_company(carrier_id: str, changes: dict) -> Optional[CarrierProfile]:
+    company = _COMPANIES.get(carrier_id)
+    if company is None:
+        return None
+    for key, value in changes.items():
+        setattr(company, key, value)
+    return company

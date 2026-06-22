@@ -3,14 +3,16 @@ from fastapi import APIRouter, HTTPException
 
 from app.carrier_panel import store
 from app.carrier_panel.schemas import (
-    AvailabilityUpdate,
     CarrierProfile,
     CarrierSummary,
+    CompanyUpdate,
     RegisterRequest,
     Vehicle,
     VehicleCreate,
+    VehicleUpdate,
     Warehouse,
     WarehouseCreate,
+    WarehouseUpdate,
 )
 
 router = APIRouter(prefix="/api/carriers", tags=["carriers"])
@@ -36,6 +38,14 @@ def get_carrier(carrier_id: str):
     return company
 
 
+@router.patch("/{carrier_id}", response_model=CarrierProfile)
+def update_carrier(carrier_id: str, data: CompanyUpdate):
+    company = store.update_company(carrier_id, data.model_dump(exclude_unset=True))
+    if company is None:
+        raise HTTPException(status_code=404, detail=f"Carrier {carrier_id} not found")
+    return company
+
+
 # --- Fleet & warehouses (Phase 2) -------------------------------------------
 
 @router.post("/{carrier_id}/vehicles", response_model=Vehicle)
@@ -55,8 +65,17 @@ def add_warehouse(carrier_id: str, data: WarehouseCreate):
 
 
 @router.patch("/{carrier_id}/vehicles/{vehicle_id}", response_model=Vehicle)
-def update_vehicle_availability(carrier_id: str, vehicle_id: str, data: AvailabilityUpdate):
-    vehicle = store.set_vehicle_availability(carrier_id, vehicle_id, data.availability_status)
+def update_vehicle(carrier_id: str, vehicle_id: str, data: VehicleUpdate):
+    """Partial vehicle edit (also used by the availability toggle)."""
+    vehicle = store.update_vehicle(carrier_id, vehicle_id, data.model_dump(exclude_unset=True))
     if vehicle is None:
         raise HTTPException(status_code=404, detail="Carrier or vehicle not found")
     return vehicle
+
+
+@router.patch("/{carrier_id}/warehouses/{warehouse_id}", response_model=Warehouse)
+def update_warehouse(carrier_id: str, warehouse_id: str, data: WarehouseUpdate):
+    warehouse = store.update_warehouse(carrier_id, warehouse_id, data.model_dump(exclude_unset=True))
+    if warehouse is None:
+        raise HTTPException(status_code=404, detail="Carrier or warehouse not found")
+    return warehouse

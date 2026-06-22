@@ -1,5 +1,5 @@
 import type {
-  CarrierProfile, CarrierSummary, RegisterPayload,
+  CarrierProfile, CarrierSummary, RegisterPayload, CompanyUpdate,
   Vehicle, VehicleCreate, Warehouse, WarehouseCreate,
 } from "./types";
 
@@ -57,4 +57,32 @@ export function setVehicleAvailability(
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ availability_status: status }),
   }).then((r) => json<Vehicle>(r));
+}
+
+export function updateVehicle(
+  carrierId: string, vehicleId: string, payload: VehicleCreate,
+): Promise<Vehicle> {
+  return fetch(`${BASE}/api/carriers/${carrierId}/vehicles/${vehicleId}`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  }).then((r) => json<Vehicle>(r));
+}
+
+export function updateWarehouse(
+  carrierId: string, warehouseId: string, payload: WarehouseCreate,
+): Promise<Warehouse> {
+  return fetch(`${BASE}/api/carriers/${carrierId}/warehouses/${warehouseId}`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  }).then((r) => json<Warehouse>(r));
+}
+
+export function updateCompany(carrierId: string, payload: CompanyUpdate): Promise<CarrierProfile> {
+  return fetch(`${BASE}/api/carriers/${carrierId}`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  }).then((r) => json<CarrierProfile>(r));
 }

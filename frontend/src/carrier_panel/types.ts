@@ -81,6 +81,17 @@ export type WarehouseCreate = {
   activation_time_hours: number;
 };
 
+export type CompanyUpdate = {
+  name: string;
+  hq_city: string;
+  voivodeship: string;
+  activity_type: string;
+  operating_region: string;
+  preferred_contact_channel: string;
+  declared_activation_time_hours: number;
+  cost_per_km: number;
+};
+
 export type CarrierProfile = {
   id: string;
   name: string;
