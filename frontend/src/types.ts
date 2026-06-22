@@ -75,3 +75,39 @@ export type TimeWindow = {
   start: Date;
   end: Date;
 };
+
+// --- Warehouses ------------------------------------------------------------
+
+/** Lean warehouse shape returned by GET /warehouse/ (summary + coordinates). */
+export type WarehouseSummary = {
+  id: string;
+  carrier_id: string;
+  name: string;
+  city: string;
+  voivodeship: string;
+  warehouse_type: string;
+  cold_storage: boolean;
+  available_capacity_pct: number;
+  availability_status: string;
+  lat: number;
+  lng: number;
+};
+
+/** Full warehouse record returned by GET /warehouse/{id}/. */
+export type WarehouseDetail = {
+  id: string;
+  carrier_id: string;
+  name: string;
+  city: string;
+  voivodeship: string;
+  geom: { lat: number; lng: number };
+  warehouse_type: string;
+  area_m2: number;
+  dock_doors: number;
+  cold_storage: boolean;
+  on_site_security: boolean;
+  operating_hours: string;
+  available_capacity_pct: number;
+  availability_status: string;
+  activation_time_hours: number;
+};

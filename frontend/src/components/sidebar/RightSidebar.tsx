@@ -1,8 +1,8 @@
-import { memo } from "react";
+import { memo, type ReactNode } from "react";
 import { Badge, SectionLabel, TruckGlyph, cx } from "../ui";
 import type { BadgeTone } from "../ui";
-import { ACTIVE_MISSION } from "../../data/dispatch";
 import type { MissionDetail, VehicleAssignment, VehicleState } from "../../types";
+import { useWarehouseDetail } from "../../hooks/useWarehouseDetail";
 
 /** Maps a vehicle state to a badge tone. */
 const STATE_TONE: Record<VehicleState, BadgeTone> = {
@@ -54,8 +54,117 @@ const VehicleRow = memo(function VehicleRow({ id, kind, state }: VehicleAssignme
   );
 });
 
+/** A label/value stat row inside the warehouse detail view. */
+const Stat = memo(function Stat({ label, value }: { label: string; value: ReactNode }) {
+  return (
+    <div className="rounded-xl bg-neutral-50 ring-1 ring-black/5 px-4 py-3">
+      <SectionLabel>{label}</SectionLabel>
+      <div className="mt-1 text-sm font-semibold tabular-nums">{value}</div>
+    </div>
+  );
+});
+
+/** Availability status → badge tone. */
+function availabilityTone(status: string): BadgeTone {
+  const s = status.toLowerCase();
+  if (s.includes("available") || s.includes("active")) return "emerald";
+  if (s.includes("limited") || s.includes("partial")) return "amber";
+  if (s.includes("full") || s.includes("unavailable") || s.includes("closed")) return "rose";
+  return "neutral";
+}
+
+/** Right rail: full detail for the selected warehouse, fetched by id. */
+function WarehouseDetailPanel({ id, carrierColor }: { id: string; carrierColor?: string }) {
+  const { data: w, loading, error } = useWarehouseDetail(id);
+
+  if (loading) {
+    return <div className="px-6 pt-6 text-[11px] text-neutral-400">Loading warehouse…</div>;
+  }
+  if (error) {
+    return <div className="px-6 pt-6 text-[11px] text-rose-500">{error}</div>;
+  }
+  if (!w) return null;
+
+  return (
+    <div className="flex flex-col h-full overflow-y-auto">
+      {/* Header */}
+      <div className="px-6 pt-6">
+        <div className="flex items-center justify-between">
+          <SectionLabel>Warehouse · {w.id}</SectionLabel>
+          <Badge tone={availabilityTone(w.availability_status)}>{w.availability_status}</Badge>
+        </div>
+        <h2 className="mt-3 text-2xl font-semibold tracking-tight">{w.name}</h2>
+        <p className="mt-1 text-[11px] text-neutral-500 tabular-nums">
+          {w.city} · {w.voivodeship} · {w.warehouse_type}
+        </p>
+      </div>
+
+      {/* Capacity */}
+      <div className="mx-6 mt-5 rounded-xl bg-neutral-50 ring-1 ring-black/5 px-4 py-3">
+        <SectionLabel>Available capacity</SectionLabel>
+        <div className="mt-1 text-2xl font-semibold tabular-nums">{w.available_capacity_pct}%</div>
+        <div className="mt-2 h-1.5 w-full rounded-full bg-neutral-200 overflow-hidden">
+          <div className="h-full rounded-full bg-neutral-900" style={{ width: `${w.available_capacity_pct}%` }} />
+        </div>
+      </div>
+
+      {/* Facility stats */}
+      <div className="px-6 mt-6">
+        <SectionLabel>Facility</SectionLabel>
+        <div className="mt-2 grid grid-cols-2 gap-2">
+          <Stat label="Area" value={`${w.area_m2.toLocaleString()} m²`} />
+          <Stat label="Dock doors" value={w.dock_doors} />
+          <Stat label="Operating hours" value={w.operating_hours} />
+          <Stat label="Activation" value={`${w.activation_time_hours} h`} />
+          <Stat label="Cold storage" value={w.cold_storage ? "Yes" : "No"} />
+          <Stat label="On-site security" value={w.on_site_security ? "Yes" : "No"} />
+        </div>
+      </div>
+
+      {/* Carrier */}
+      <div className="px-6 mt-6">
+        <SectionLabel>Carrier</SectionLabel>
+        <div className="mt-2 flex items-center gap-3 rounded-xl ring-1 ring-black/5 px-4 py-3">
+          <span className="size-3 shrink-0 rounded-full" style={{ background: carrierColor ?? "#525252" }} />
+          <div className="text-sm font-medium tabular-nums">{w.carrier_id}</div>
+        </div>
+      </div>
+
+      {/* Location */}
+      <div className="px-6 mt-6 pb-6">
+        <SectionLabel>Coordinates</SectionLabel>
+        <div className="mt-2 rounded-xl ring-1 ring-black/5 px-4 py-3 text-[11px] text-neutral-500 tabular-nums">
+          {w.geom.lat.toFixed(4)}, {w.geom.lng.toFixed(4)}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * Right rail: warehouse detail when one is selected. Falls back to a mission
+ * detail only if a `mission` is explicitly passed; otherwise renders nothing.
+ */
+export function RightSidebar({
+  mission,
+  warehouseId,
+  carrierColor,
+}: {
+  mission?: MissionDetail;
+  warehouseId?: string | null;
+  carrierColor?: string;
+}) {
+  if (warehouseId) {
+    return <WarehouseDetailPanel id={warehouseId} carrierColor={carrierColor} />;
+  }
+  if (mission) {
+    return <MissionDetailPanel mission={mission} />;
+  }
+  return null;
+}
+
 /** Right rail: detail view for the selected mission. */
-export function RightSidebar({ mission = ACTIVE_MISSION }: { mission?: MissionDetail }) {
+function MissionDetailPanel({ mission }: { mission: MissionDetail }) {
   return (
     <div className="flex flex-col h-full overflow-y-auto">
       {/* Header */}
