@@ -104,6 +104,13 @@ mission for now.
 ]
 ```
 
+### `PATCH /tasks/{taskId}`
+
+Mark a task as finished (delivered). Implicitly advances the parent mission's
+state (`driver_delivered`). MVP — no body.
+
+**Response `200 OK`:** the updated task (same shape as the list item above).
+
 ---
 
 ## Incidents

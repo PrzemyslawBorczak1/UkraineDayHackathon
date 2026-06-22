@@ -131,6 +131,23 @@ def get_vehicle_tasks(vehicle_id: str, db: Session = Depends(get_db)):
     return [_task_payload(t) for t in tasks]
 
 
+@router.patch("/tasks/{task_id}")
+def finish_task(task_id: int, db: Session = Depends(get_db)):
+    """Mark a task as finished — implicitly delivers the parent mission."""
+    task = db.query(Task).filter(Task.id == task_id).first()
+    if task is None:
+        raise HTTPException(status_code=404, detail=f"Task {task_id} does not exist")
+    emit_event(
+        db,
+        mission_id=task.mission_id,
+        event_type=EventType.DRIVER_DELIVERED,
+        actor=f"vehicle:{task.vehicle_id}",
+        payload={"task_id": task_id},
+    )
+    db.refresh(task)
+    return _task_payload(task)
+
+
 # --------------------------------------------------------------------------- #
 # Incidents
 # --------------------------------------------------------------------------- #
