@@ -1,3 +1,4 @@
+import { useMemo, useState } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { MapContainer, Marker, Polyline, Popup, TileLayer } from "react-leaflet";
 import L from "leaflet";
@@ -5,11 +6,11 @@ import { TruckIcon } from "../components/TruckIcon";
 import { useStatisticsData } from "../hooks/useStatisticsData";
 import type { LatLng } from "../types";
 
-// Distinct colors per mission so routes are easy to tell apart.
-const MISSION_COLORS = ["#2563eb", "#dc2626", "#16a34a", "#d97706", "#7c3aed"];
-
 // Palette used to color vehicles by carrier.
 const CARRIER_COLORS = ["#2563eb", "#dc2626", "#16a34a", "#d97706", "#7c3aed", "#0891b2"];
+
+// Neutral color for all mission routes.
+const MISSION_COLOR = "#6b7280";
 
 // Center roughly between Poland and Ukraine.
 const DEFAULT_CENTER: LatLng = [51.0, 22.0];
@@ -41,78 +42,188 @@ function makeTruckIcon(color: string): L.DivIcon {
 export function StatisticsPage() {
   const { missions, vehicles, loading, error } = useStatisticsData();
 
+  // Carriers present in the data.
+  const carrierIds = useMemo(
+    () => Array.from(new Set(vehicles.map((v) => v.carrierId))).sort(),
+    [vehicles]
+  );
+
+  // Which carriers are currently shown. `null` means "all" (default).
+  const [selected, setSelected] = useState<Set<string> | null>(null);
+
+  const isSelected = (carrierId: string) =>
+    selected === null || selected.has(carrierId);
+
+  const toggleCarrier = (carrierId: string) => {
+    setSelected((prev) => {
+      // Start from the full set if we were showing everything.
+      const next = new Set(prev ?? carrierIds);
+      if (next.has(carrierId)) {
+        next.delete(carrierId);
+      } else {
+        next.add(carrierId);
+      }
+      return next;
+    });
+  };
+
+  const visibleVehicles = vehicles.filter((v) => isSelected(v.carrierId));
+
   return (
-    <div style={{ height: "100vh", width: "100vw", position: "relative" }}>
-      {(loading || error) && (
-        <div
+    <div
+      style={{
+        display: "flex",
+        flexDirection: "column",
+        height: "100vh",
+        width: "100vw",
+        fontFamily: "sans-serif",
+      }}
+    >
+      <div style={{ flex: 1, position: "relative", minHeight: 0, padding: 16 }}>
+        {(loading || error) && (
+          <div
+            style={{
+              position: "absolute",
+              top: 26,
+              left: "50%",
+              transform: "translateX(-50%)",
+              zIndex: 1000,
+              background: error ? "#fee2e2" : "#fff",
+              padding: "4px 10px",
+              borderRadius: 6,
+              boxShadow: "0 1px 4px rgba(0,0,0,0.2)",
+              fontSize: 12,
+            }}
+          >
+            {error ? `Error: ${error}` : "Loading map data…"}
+          </div>
+        )}
+
+        <MapContainer
+          center={DEFAULT_CENTER}
+          zoom={DEFAULT_ZOOM}
           style={{
-            position: "absolute",
-            top: 10,
-            left: "50%",
-            transform: "translateX(-50%)",
-            zIndex: 1000,
-            background: error ? "#fee2e2" : "#fff",
-            padding: "4px 10px",
-            borderRadius: 6,
-            boxShadow: "0 1px 4px rgba(0,0,0,0.2)",
-            fontFamily: "sans-serif",
-            fontSize: 12,
+            height: "100%",
+            width: "100%",
+            borderRadius: 8,
+            boxShadow: "0 1px 6px rgba(0,0,0,0.15)",
           }}
         >
-          {error ? `Error: ${error}` : "Loading map data…"}
-        </div>
-      )}
+          <TileLayer
+            attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+            url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+          />
 
-      <MapContainer
-        center={DEFAULT_CENTER}
-        zoom={DEFAULT_ZOOM}
-        style={{ height: "100%", width: "100%" }}
-      >
-        <TileLayer
-          attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
-          url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-        />
+          {/* Mission routes (dashed, neutral color) */}
+          {missions.map((mission) =>
+            mission.trips.map((trip) => (
+              <Polyline
+                key={trip.id}
+                positions={trip.polyline}
+                pathOptions={{
+                  color: MISSION_COLOR,
+                  weight: 2.5,
+                  opacity: 0.8,
+                  dashArray: "8 8",
+                }}
+              >
+                <Popup>
+                  Mission: {mission.id}
+                  <br />
+                  Trip: {trip.id}
+                </Popup>
+              </Polyline>
+            ))
+          )}
 
-        {/* Mission routes (dashed polylines per trip) */}
-        {missions.map((mission, i) => {
-          const color = MISSION_COLORS[i % MISSION_COLORS.length];
-          return mission.trips.map((trip) => (
-            <Polyline
-              key={trip.id}
-              positions={trip.polyline}
-              pathOptions={{
-                color,
-                weight: 2.5,
-                opacity: 0.8,
-                dashArray: "8 8",
-              }}
+          {/* Vehicles (colored by carrier, filtered) */}
+          {visibleVehicles.map((vehicle) => (
+            <Marker
+              key={vehicle.id}
+              position={[vehicle.lat, vehicle.lng]}
+              icon={makeTruckIcon(carrierColor(vehicle.carrierId))}
             >
               <Popup>
-                Mission: {mission.id}
+                Vehicle: {vehicle.id}
                 <br />
-                Trip: {trip.id}
+                Carrier: {vehicle.carrierId}
+                <br />
+                Trip: {vehicle.tripId}
               </Popup>
-            </Polyline>
-          ));
-        })}
+            </Marker>
+          ))}
+        </MapContainer>
+      </div>
 
-        {/* Vehicles (colored by carrier) */}
-        {vehicles.map((vehicle) => (
-          <Marker
-            key={vehicle.id}
-            position={[vehicle.lat, vehicle.lng]}
-            icon={makeTruckIcon(carrierColor(vehicle.carrierId))}
-          >
-            <Popup>
-              Vehicle: {vehicle.id}
-              <br />
-              Carrier: {vehicle.carrierId}
-              <br />
-              Trip: {vehicle.tripId}
-            </Popup>
-          </Marker>
-        ))}
-      </MapContainer>
+      {/* Carrier filter bar */}
+      <div
+        style={{
+          flexShrink: 0,
+          padding: "12px 16px",
+          borderTop: "1px solid #e5e7eb",
+          background: "#f9fafb",
+          display: "flex",
+          alignItems: "center",
+          gap: 10,
+          flexWrap: "wrap",
+        }}
+      >
+        <span style={{ fontSize: 13, fontWeight: 600, color: "#374151" }}>
+          Carriers:
+        </span>
+
+        <button
+          type="button"
+          onClick={() => setSelected(null)}
+          style={{
+            fontSize: 12,
+            padding: "4px 10px",
+            borderRadius: 999,
+            border: "1px solid #d1d5db",
+            background: selected === null ? "#111827" : "#fff",
+            color: selected === null ? "#fff" : "#374151",
+            cursor: "pointer",
+          }}
+        >
+          All
+        </button>
+
+        {carrierIds.map((carrierId) => {
+          const active = isSelected(carrierId);
+          const color = carrierColor(carrierId);
+          return (
+            <button
+              key={carrierId}
+              type="button"
+              onClick={() => toggleCarrier(carrierId)}
+              style={{
+                fontSize: 12,
+                padding: "4px 10px",
+                borderRadius: 999,
+                border: `1px solid ${color}`,
+                background: active ? color : "#fff",
+                color: active ? "#fff" : color,
+                cursor: "pointer",
+                display: "inline-flex",
+                alignItems: "center",
+                gap: 6,
+                opacity: active ? 1 : 0.6,
+              }}
+            >
+              <span
+                style={{
+                  width: 8,
+                  height: 8,
+                  borderRadius: "50%",
+                  background: color,
+                  border: active ? "1px solid #fff" : "none",
+                }}
+              />
+              {carrierId}
+            </button>
+          );
+        })}
+      </div>
     </div>
   );
 }
