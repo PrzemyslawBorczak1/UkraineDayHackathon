@@ -6,10 +6,10 @@ import math
 
 
 class Status(Enum):
-    PASSIVE_WAITING = 1  # Oczekiwanie bez ładunku
-    ACTIVE_WAITING = 2  # Oczekiwanie z ładunkiem
-    IN_PROGRESS_ACTIVE = 3  # Jazda z ładunkiem
-    IN_PROGRESS_PASSIVE = 4  # Jazda bez ładunku
+    PASSIVE_WAITING = 1
+    ACTIVE_WAITING = 2
+    IN_PROGRESS_ACTIVE = 3
+    IN_PROGRESS_PASSIVE = 4
 
 
 class Priority(Enum):
@@ -19,17 +19,17 @@ class Priority(Enum):
 
 
 class State(Enum):
-    CREATED = 1  # Misja utworzona, oczekuje na przypisanie
-    IN_PROGRESS = 2  # Misja częściowo przypisana
-    CLOSED = 3  # Misja w pełni zrealizowana
+    CREATED = 1
+    IN_PROGRESS = 2
+    CLOSED = 3
 
 
 class VehicleType(Enum):
-    RIGID_TRACK = 1
-    REFRIGERATED_SEMI = 2
-    BDF_SWAP_BODY = 3
-    STANDARD_SEMI = 4
-    VAN = 5
+    RIGID_TRUCK = 1
+    STANDARD_SEMI = 2
+    VAN = 3
+    BDF_SWAP_BODY = 4
+    REFRIGERATED_SEMI = 5
 
 
 @dataclass
@@ -386,7 +386,6 @@ class DailyALNSScheduler:
         base_day_midnight = current_date.replace(
             hour=0, minute=0, second=0, microsecond=0
         )
-        next_day_midnight = base_day_midnight + timedelta(days=1)
 
         # Przeszukiwanie okna godzinowego
         for hour_offset in range(0, 48):  # do 48h, aby obsłużyć przejścia przez północ
@@ -518,10 +517,8 @@ class DailyALNSScheduler:
         self,
         start_date: datetime,
         end_date: datetime,
-        simulation_time: datetime | None = None,
     ):
         current_date = start_date
-        sim_time = simulation_time or start_date
 
         while current_date <= end_date:
             next_date = current_date + timedelta(days=1)
@@ -665,11 +662,9 @@ class DailyALNSScheduler:
 
             removed_count += 1
 
-    def repair_greedy(
-        self, start_date: datetime, end_date: datetime, simulation_time: datetime
-    ):
+    def repair_greedy(self, start_date: datetime, end_date: datetime):
         self._rebuild_unassigned_list()
-        self.create_initial_solution(start_date, end_date, simulation_time)
+        self.create_initial_solution(start_date, end_date)
 
     def run_alns(
         self,
@@ -680,7 +675,7 @@ class DailyALNSScheduler:
     ):
         sim_time = simulation_time or start_date
         self._rebuild_unassigned_list()
-        self.create_initial_solution(start_date, end_date, sim_time)
+        self.create_initial_solution(start_date, end_date)
 
         for _ in range(iterations):
             num_to_remove = int(len(self.missions) * random.uniform(0.1, 0.25))
@@ -688,7 +683,7 @@ class DailyALNSScheduler:
 
             if num_to_remove > 0:
                 self.destroy_worst_assignments(num_to_remove, sim_time)
-                self.repair_greedy(start_date, end_date, sim_time)
+                self.repair_greedy(start_date, end_date)
 
 
 def print_vehicle_working_hours(vehicle: Vehicle):
