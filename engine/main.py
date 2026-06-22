@@ -197,7 +197,8 @@ def calculate_score(
     }
     s_priority = priority_multiplier.get(mission.priority, 0)
 
-    penalty_active = active_wait_hours * 50.0
+    # Kara za oczekiwanie z ładunkiem – teraz bardzo duża
+    penalty_active = active_wait_hours * 1000.0
     penalty_passive = passive_wait_hours * 1.0
 
     return (
@@ -442,10 +443,73 @@ class DailyALNSScheduler:
             if allocated_weight <= 0 or allocated_volume <= 0:
                 continue
 
-            passive_wait = timedelta(0)
+            # === NOWOŚĆ: spróbuj opóźnić wyjazd, aby dostawa była dokładnie na otwarcie ===
+            # Oblicz idealny czas startu, który eliminuje oczekiwanie z ładunkiem.
+            # Chcemy: delivery_arrival == wh_dest_open.
+            # delivery_arrival = loading_start + transit_duration
+            # loading_start = max(arrival_at_origin, wh_open) = max(possible_start + approach_duration, wh_open)
+            # Szukamy nowego startu `new_start`.
+            # Jeśli załadunek może odbyć się natychmiast po przyjeździe (arrival >= wh_open):
+            #   wh_dest_open = new_start + approach_duration + transit_duration
+            #   => new_start = wh_dest_open - approach_duration - transit_duration
+            # W przeciwnym razie (gdy arrival < wh_open), loading_start = wh_open, więc
+            #   delivery_arrival = wh_open + transit_duration – niezależne od startu.
+            #   Jeśli to już jest >= wh_dest_open, to każdy start przed wh_open - approach_duration jest dobry.
+            #   Wybierzemy wtedy najpóźniejszy możliwy start (żeby nie czekać bez ładunku dłużej niż trzeba).
+            # Sprawdzamy, czy nowy start nie koliduje z ograniczeniami.
+            if arrival_at_origin >= wh_open:
+                ideal_start = wh_dest_open - approach_duration - transit_duration
+                # ideal_start musi być >= earliest_start i <= arrival_at_origin (bo nie możemy przecież wyjechać wcześniej niż pierwotnie)
+                # Jeśli ideal_start < possible_start, to nie ma sensu opóźniać, bo już jest za późno.
+                if ideal_start >= possible_start and ideal_start >= earliest_start:
+                    new_start = ideal_start
+                    # Upewnij się, że nowy start nie powoduje problemów z załadunkiem (magazyn otwarty)
+                    new_arrival = new_start + approach_duration
+                    new_loading_start = max(new_arrival, wh_open)
+                    if new_loading_start < wh_close:
+                        # Sprawdź dostępność pojazdu dla nowego zakresu
+                        new_delivery_arrival = new_loading_start + transit_duration
+                        new_delivery_start = max(new_delivery_arrival, wh_dest_open)
+                        new_delivery_end = new_delivery_start + unloading_time
+                        if vehicle.is_available(new_start, new_delivery_end):
+                            possible_start = new_start
+                            arrival_at_origin = new_arrival
+                            loading_start = new_loading_start
+                            delivery_arrival = new_delivery_arrival
+                            delivery_start = new_delivery_start
+                            delivery_end = new_delivery_end
+            else:
+                # arrival < wh_open, załadunek i tak zacznie się o wh_open.
+                # Sprawdź, czy wh_open + transit_duration >= wh_dest_open.
+                if wh_open + transit_duration >= wh_dest_open:
+                    # Możemy opóźnić start tak, aby dotrzeć później, ale nadal przed wh_open? Nie ma to wpływu na dostawę.
+                    # Optymalnie: wyjechać jak najpóźniej, aby arrival_at_origin = wh_open (lub tuż przed).
+                    ideal_arrival = wh_open
+                    ideal_start = ideal_arrival - approach_duration
+                    if ideal_start >= possible_start and ideal_start >= earliest_start:
+                        new_start = ideal_start
+                        new_arrival = new_start + approach_duration
+                        new_loading_start = max(new_arrival, wh_open)
+                        if new_loading_start < wh_close:
+                            new_delivery_arrival = new_loading_start + transit_duration
+                            new_delivery_start = max(new_delivery_arrival, wh_dest_open)
+                            new_delivery_end = new_delivery_start + unloading_time
+                            if vehicle.is_available(new_start, new_delivery_end):
+                                possible_start = new_start
+                                arrival_at_origin = new_arrival
+                                loading_start = new_loading_start
+                                delivery_arrival = new_delivery_arrival
+                                delivery_start = new_delivery_start
+                                delivery_end = new_delivery_end
+
+            # Po ewentualnym opóźnieniu, ponownie przelicz czasy oczekiwania
+            passive_wait_before_load = timedelta(0)
             if arrival_at_origin < wh_open:
-                passive_wait = wh_open - arrival_at_origin
-                if passive_wait.total_seconds() / 3600 > self.max_passive_waiting_hours:
+                passive_wait_before_load = wh_open - arrival_at_origin
+                if (
+                    passive_wait_before_load.total_seconds() / 3600
+                    > self.max_passive_waiting_hours
+                ):
                     continue
 
             active_wait = timedelta(0)
@@ -453,7 +517,7 @@ class DailyALNSScheduler:
                 active_wait = wh_dest_open - delivery_arrival
 
             active_wait_hours = active_wait.total_seconds() / 3600.0
-            passive_wait_hours = passive_wait.total_seconds() / 3600.0
+            passive_wait_hours = passive_wait_before_load.total_seconds() / 3600.0
 
             score = calculate_score(
                 mission,
@@ -668,7 +732,7 @@ class DailyALNSScheduler:
                         assignment_info[key]["passive_wait_sec"] += (
                             interval.end - interval.start
                         ).total_seconds()
-                    if interval.status == Status.IN_PROGRESS_ACTIVE:  # <-- POPRAWIONE
+                    if interval.status == Status.IN_PROGRESS_ACTIVE:
                         assignment_info[key]["intervals"].append(interval)
 
         if not assignment_info:
@@ -931,7 +995,7 @@ if __name__ == "__main__":
         wh2,
         Priority.LOW,
         datetime.now(),
-        datetime.now() + timedelta(days=7),
+        datetime.now() + timedelta(days=3),
         weight=60.0,
         volume=2.0,
         route_distance=200.0,
