@@ -1,13 +1,13 @@
 import 'package:flutter/material.dart';
 
-import '../models/mission.dart';
+import '../models/task.dart';
 import '../services/api_service.dart';
 import '../theme/app_theme.dart';
 import '../widgets/incident_bottom_sheet.dart';
-import '../widgets/mission_card.dart';
+import '../widgets/task_card.dart';
 import 'profile_screen.dart';
 
-/// Main missions list screen.
+/// Main screen showing the driver's task list.
 class MainScreen extends StatefulWidget {
   final ApiService api;
   final String vehicleId;
@@ -23,21 +23,21 @@ class MainScreen extends StatefulWidget {
 }
 
 class _MainScreenState extends State<MainScreen> {
-  late Future<List<Mission>> _missionsFuture;
+  late Future<List<Task>> _tasksFuture;
 
   @override
   void initState() {
     super.initState();
-    _missionsFuture = widget.api.getMissions(widget.vehicleId);
+    _tasksFuture = widget.api.getTasks(widget.vehicleId);
   }
 
   void _refresh() {
     setState(() {
-      _missionsFuture = widget.api.getMissions(widget.vehicleId);
+      _tasksFuture = widget.api.getTasks(widget.vehicleId);
     });
   }
 
-  void _openIncidentSheet(String missionId) {
+  void _openIncidentSheet(int taskId) {
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
@@ -48,7 +48,7 @@ class _MainScreenState extends State<MainScreen> {
       ),
       builder: (_) => IncidentBottomSheet(
         api: widget.api,
-        currentMissionId: missionId,
+        currentTaskId: taskId,
       ),
     );
   }
@@ -80,7 +80,7 @@ class _MainScreenState extends State<MainScreen> {
             },
           ),
         ),
-        title: const Text('Missions'),
+        title: const Text('Tasks'),
         actions: [
           IconButton(
             icon: const Icon(Icons.refresh_rounded, size: 20),
@@ -90,8 +90,8 @@ class _MainScreenState extends State<MainScreen> {
           const SizedBox(width: 8),
         ],
       ),
-      body: FutureBuilder<List<Mission>>(
-        future: _missionsFuture,
+      body: FutureBuilder<List<Task>>(
+        future: _tasksFuture,
         builder: (context, snapshot) {
           if (snapshot.connectionState == ConnectionState.waiting) {
             return const Center(
@@ -107,8 +107,9 @@ class _MainScreenState extends State<MainScreen> {
                   const Icon(Icons.cloud_off_rounded,
                       size: 40, color: AppTheme.textLow),
                   const SizedBox(height: 12),
-                  const Text('Failed to load missions',
-                      style: TextStyle(color: AppTheme.textMid, fontSize: 14)),
+                  const Text('Failed to load tasks',
+                      style:
+                          TextStyle(color: AppTheme.textMid, fontSize: 15)),
                   const SizedBox(height: 8),
                   TextButton.icon(
                     onPressed: _refresh,
@@ -120,12 +121,12 @@ class _MainScreenState extends State<MainScreen> {
             );
           }
 
-          final missions = snapshot.data!;
+          final tasks = snapshot.data!;
 
-          if (missions.isEmpty) {
+          if (tasks.isEmpty) {
             return const Center(
-              child: Text('No missions assigned',
-                  style: TextStyle(color: AppTheme.textMid, fontSize: 14)),
+              child: Text('No tasks assigned',
+                  style: TextStyle(color: AppTheme.textMid, fontSize: 15)),
             );
           }
 
@@ -135,24 +136,26 @@ class _MainScreenState extends State<MainScreen> {
             child: ListView.builder(
               physics: const AlwaysScrollableScrollPhysics(),
               padding: const EdgeInsets.fromLTRB(16, 8, 16, 80),
-              itemCount: missions.length,
-              itemBuilder: (_, i) => MissionCard(mission: missions[i]),
+              itemCount: tasks.length,
+              itemBuilder: (_, i) => TaskCard(task: tasks[i]),
             ),
           );
         },
       ),
-      floatingActionButton: FutureBuilder<List<Mission>>(
-        future: _missionsFuture,
+      floatingActionButton: FutureBuilder<List<Task>>(
+        future: _tasksFuture,
         builder: (context, snapshot) {
-          final missions = snapshot.data;
-          String currentId = '';
-          if (missions != null) {
-            final c = missions.where((m) => m.isCurrent);
-            if (c.isNotEmpty) currentId = c.first.id;
+          final tasks = snapshot.data;
+          int currentTaskId = 0;
+          if (tasks != null) {
+            final c = tasks.where((t) => t.isCurrent);
+            if (c.isNotEmpty) currentTaskId = c.first.id;
           }
 
           return FloatingActionButton.extended(
-            onPressed: () => _openIncidentSheet(currentId),
+            onPressed: currentTaskId > 0
+                ? () => _openIncidentSheet(currentTaskId)
+                : null,
             backgroundColor: AppTheme.caution,
             foregroundColor: AppTheme.background,
             elevation: 2,
@@ -162,7 +165,7 @@ class _MainScreenState extends State<MainScreen> {
             icon: const Icon(Icons.warning_rounded, size: 18),
             label: const Text(
               'Incident',
-              style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13),
+              style: TextStyle(fontWeight: FontWeight.w600, fontSize: 14),
             ),
           );
         },

@@ -7,12 +7,12 @@ import '../theme/app_theme.dart';
 /// Bottom sheet for reporting an incident (end of mission or delay).
 class IncidentBottomSheet extends StatefulWidget {
   final ApiService api;
-  final String currentMissionId;
+  final int currentTaskId;
 
   const IncidentBottomSheet({
     super.key,
     required this.api,
-    required this.currentMissionId,
+    required this.currentTaskId,
   });
 
   @override
@@ -33,12 +33,10 @@ class _IncidentBottomSheetState extends State<IncidentBottomSheet> {
     setState(() => _isSending = true);
 
     final incident = Incident(
-      missionId: widget.currentMissionId,
+      taskId: widget.currentTaskId,
       type: _selectedType!,
-      delayDuration:
-          _selectedType == IncidentType.delay && _delayMinutes != null
-              ? Duration(minutes: _delayMinutes!)
-              : null,
+      delayMinutes:
+          _selectedType == IncidentType.delay ? _delayMinutes : null,
       description:
           _descriptionCtrl.text.isNotEmpty ? _descriptionCtrl.text : null,
       reportedAt: DateTime.now(),
@@ -55,8 +53,7 @@ class _IncidentBottomSheetState extends State<IncidentBottomSheet> {
           content: const Text('Incident reported'),
           backgroundColor: AppTheme.success,
           behavior: SnackBarBehavior.floating,
-          shape:
-              RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
         ),
       );
       Navigator.of(context).pop();
@@ -78,7 +75,6 @@ class _IncidentBottomSheetState extends State<IncidentBottomSheet> {
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          // Handle
           Center(
             child: Container(
               width: 32,
@@ -91,16 +87,14 @@ class _IncidentBottomSheetState extends State<IncidentBottomSheet> {
           ),
           const SizedBox(height: 16),
 
-          // Title
           Row(
             children: [
-              Icon(Icons.warning_rounded,
-                  color: AppTheme.caution, size: 20),
+              Icon(Icons.warning_rounded, color: AppTheme.caution, size: 20),
               const SizedBox(width: 10),
               const Text(
                 'Report Incident',
                 style: TextStyle(
-                  fontSize: 16,
+                  fontSize: 18,
                   fontWeight: FontWeight.w600,
                   color: AppTheme.textHigh,
                 ),
@@ -109,7 +103,6 @@ class _IncidentBottomSheetState extends State<IncidentBottomSheet> {
           ),
           const SizedBox(height: 20),
 
-          // Type
           DropdownButtonFormField<IncidentType>(
             decoration: const InputDecoration(labelText: 'Incident Type'),
             dropdownColor: AppTheme.surfaceAlt,
@@ -118,8 +111,7 @@ class _IncidentBottomSheetState extends State<IncidentBottomSheet> {
               return DropdownMenuItem(
                 value: type,
                 child: Text(type.label,
-                    style: const TextStyle(
-                        color: AppTheme.textHigh, fontSize: 13)),
+                    style: const TextStyle(color: AppTheme.textHigh, fontSize: 15)),
               );
             }).toList(),
             onChanged: (value) => setState(() => _selectedType = value),
@@ -128,8 +120,7 @@ class _IncidentBottomSheetState extends State<IncidentBottomSheet> {
           if (_selectedType == IncidentType.delay) ...[
             const SizedBox(height: 12),
             DropdownButtonFormField<int>(
-              decoration:
-                  const InputDecoration(labelText: 'Delay Duration'),
+              decoration: const InputDecoration(labelText: 'Delay Duration'),
               dropdownColor: AppTheme.surfaceAlt,
               initialValue: _delayMinutes,
               items: _delayOptions.map((m) {
@@ -139,8 +130,7 @@ class _IncidentBottomSheetState extends State<IncidentBottomSheet> {
                 return DropdownMenuItem(
                   value: m,
                   child: Text(label.trim(),
-                      style: const TextStyle(
-                          color: AppTheme.textHigh, fontSize: 13)),
+                      style: const TextStyle(color: AppTheme.textHigh, fontSize: 15)),
                 );
               }).toList(),
               onChanged: (value) => setState(() => _delayMinutes = value),
@@ -152,7 +142,7 @@ class _IncidentBottomSheetState extends State<IncidentBottomSheet> {
           TextField(
             controller: _descriptionCtrl,
             maxLines: 3,
-            style: const TextStyle(color: AppTheme.textHigh, fontSize: 13),
+            style: const TextStyle(color: AppTheme.textHigh, fontSize: 15),
             decoration: const InputDecoration(
               labelText: 'Opis (Optional)',
               alignLabelWithHint: true,
@@ -160,7 +150,6 @@ class _IncidentBottomSheetState extends State<IncidentBottomSheet> {
           ),
           const SizedBox(height: 20),
 
-          // Actions
           Row(
             children: [
               Expanded(

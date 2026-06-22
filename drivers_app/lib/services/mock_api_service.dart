@@ -1,109 +1,126 @@
 import '../models/auth_result.dart';
 import '../models/incident.dart';
-import '../models/mission.dart';
+import '../models/task.dart';
 import '../models/vehicle.dart';
 import 'api_service.dart';
 
-/// Mock implementation of [ApiService] for development and demos.
+/// Mock implementation of [ApiService] for offline development.
 ///
-/// Replace this with [HttpApiService] (backed by `package:http` or `dio`)
-/// when the real backend is available.
+/// Replace with [HttpApiService] when the backend is running.
 class MockApiService implements ApiService {
-  // Simulate network latency.
-  static const _networkDelay = Duration(milliseconds: 600);
+  static const _delay = Duration(milliseconds: 600);
 
   @override
-  Future<AuthResult> login(String vehicleId, String password) async {
-    await Future.delayed(_networkDelay);
-    // Accept any credentials for the MVP.
+  Future<AuthResult> login(String vehicleId) async {
+    await Future.delayed(_delay);
     return AuthResult(
-      token: 'mock-jwt-token-${DateTime.now().millisecondsSinceEpoch}',
-      vehicleId: vehicleId.isNotEmpty ? vehicleId : 'TRK-001',
+      vehicleId: vehicleId.isNotEmpty ? vehicleId : 'V0001',
       success: true,
     );
   }
 
   @override
   Future<Vehicle> getVehicle(String vehicleId) async {
-    await Future.delayed(_networkDelay);
+    await Future.delayed(_delay);
     return Vehicle(
       vehicleID: vehicleId,
-      type: 'Heavy Truck (Cooler)',
-      weight: 8000,
-      payload: 50000,
-      volume: 7000,
-      operationalRange: 10000,
-      features: ['Temperature control', 'GPS Tracking'],
-      restrictions: ['Can\'t park in public places', 'Can\'t enter Chechia'],
+      type: 'Refrigerated semi',
+      weight: 40,
+      payload: 24,
+      volume: 90,
+      operationalRange: 1200,
+      features: ['Temperature control', 'Liftgate'],
+      restrictions: ['No city centre'],
     );
   }
 
   @override
-  Future<List<Mission>> getMissions(String vehicleId) async {
-    await Future.delayed(_networkDelay);
+  Future<List<Task>> getTasks(String vehicleId) async {
+    await Future.delayed(_delay);
     final now = DateTime.now();
     return [
-      Mission(
-        id: 'M-001',
+      Task(
+        id: 1,
+        missionId: 'M0001',
         cargoType: 'Food',
         startTime: now.add(const Duration(hours: 1)),
         endTime: now.add(const Duration(hours: 7)),
         origin: 'Warszawa',
-        destination: 'Kijów',
-        weight: 20000,
-        volume: 4000,
-        specialRequirements: ['Temperature has to be kept at 2-8 °C'],
-        unloadingWaitTime: const Duration(minutes: 45),
+        destination: 'Opole',
+        weight: 20,
+        volume: 40,
+        specialRequirements: ['Temperature 2-8°C required'],
+        unloadingWaitMinutes: 45,
         isCurrent: true,
       ),
-      Mission(
-        id: 'M-002',
+      Task(
+        id: 2,
+        missionId: 'M0002',
         cargoType: 'Medicine',
         startTime: DateTime(now.year, now.month, now.day + 1, 7, 0),
         endTime: DateTime(now.year, now.month, now.day + 1, 13, 0),
         origin: 'Łódź',
-        destination: 'Lwów',
-        weight: 2500,
-        volume: 800,
-        specialRequirements: ['Dry storage only'],
-        unloadingWaitTime: const Duration(hours: 1),
+        destination: 'Nysa',
+        weight: 2.5,
+        volume: 8,
+        specialRequirements: [],
+        unloadingWaitMinutes: null,
         isCurrent: false,
       ),
-      Mission(
-        id: 'M-003',
-        cargoType: 'Medicine',
+      Task(
+        id: 3,
+        missionId: 'M0003',
+        cargoType: 'Blankets',
         startTime: DateTime(now.year, now.month, now.day + 2, 7, 0),
         endTime: DateTime(now.year, now.month, now.day + 2, 13, 0),
         origin: 'Łódź',
         destination: 'Lwów',
-        weight: 3200,
-        volume: 1200,
+        weight: 5,
+        volume: 12,
         specialRequirements: [],
-        unloadingWaitTime: const Duration(hours: 1, minutes: 30),
+        unloadingWaitMinutes: null,
         isCurrent: false,
       ),
     ];
   }
 
   @override
+  Future<Task> finishTask(int taskId) async {
+    await Future.delayed(_delay);
+    // Return a dummy completed task
+    return Task(
+      id: taskId,
+      missionId: 'M0001',
+      cargoType: 'Food',
+      startTime: DateTime.now(),
+      endTime: DateTime.now(),
+      origin: 'Warszawa',
+      destination: 'Opole',
+      weight: 20,
+      volume: 40,
+      specialRequirements: [],
+      unloadingWaitMinutes: null,
+      isCurrent: false,
+    );
+  }
+
+  @override
   Future<bool> reportIncident(Incident incident) async {
-    await Future.delayed(_networkDelay);
+    await Future.delayed(_delay);
     // ignore: avoid_print
     print('┌──────────────────────────────────────────');
     // ignore: avoid_print
-    print('│ 📡  INCIDENT SENT TO BACKEND (mock)');
+    print('│ 📡  INCIDENT REPORTED (mock)');
+    // ignore: avoid_print
+    print('│ Task:        ${incident.taskId}');
     // ignore: avoid_print
     print('│ Type:        ${incident.type.label}');
-    if (incident.delayDuration != null) {
+    if (incident.delayMinutes != null) {
       // ignore: avoid_print
-      print('│ Delay:       ${incident.delayDuration!.inMinutes} min');
+      print('│ Delay:       ${incident.delayMinutes} min');
     }
     // ignore: avoid_print
     print('│ Description: ${incident.description ?? '—'}');
-    // ignore: avoid_print
-    print('│ Mission:     ${incident.missionId}');
-    // ignore: avoid_print
-    print('│ Reported at: ${incident.reportedAt.toIso8601String()}');
     // ignore: avoid_print
     print('└──────────────────────────────────────────');
     return true;

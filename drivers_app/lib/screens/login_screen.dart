@@ -4,7 +4,7 @@ import '../services/api_service.dart';
 import '../theme/app_theme.dart';
 import 'main_screen.dart';
 
-/// Minimal login screen.
+/// Minimal login screen — MVP: vehicle_id only, no password.
 class LoginScreen extends StatefulWidget {
   final ApiService api;
 
@@ -16,42 +16,43 @@ class LoginScreen extends StatefulWidget {
 
 class _LoginScreenState extends State<LoginScreen> {
   final _vehicleIdCtrl = TextEditingController();
-  final _passwordCtrl = TextEditingController();
   bool _isLoading = false;
   String? _error;
 
   Future<void> _login() async {
+    final vid = _vehicleIdCtrl.text.trim();
+    if (vid.isEmpty) {
+      setState(() => _error = 'Enter a Vehicle ID');
+      return;
+    }
+
     setState(() {
       _isLoading = true;
       _error = null;
     });
 
     try {
-      final result = await widget.api.login(
-        _vehicleIdCtrl.text.trim(),
-        _passwordCtrl.text.trim(),
-      );
+      final result = await widget.api.login(vid);
+      print('Login result: $result');
 
       if (!mounted) return;
 
       if (result.success) {
         Navigator.of(context).pushReplacement(
           PageRouteBuilder(
-            pageBuilder: (_, __, ___) => MainScreen(
-              api: widget.api,
-              vehicleId: result.vehicleId,
-            ),
+            pageBuilder: (_, __, ___) =>
+                MainScreen(api: widget.api, vehicleId: result.vehicleId),
             transitionsBuilder: (_, a, __, child) =>
                 FadeTransition(opacity: a, child: child),
             transitionDuration: const Duration(milliseconds: 300),
           ),
         );
       } else {
-        setState(() => _error = result.errorMessage ?? 'Login failed');
+        setState(() => _error = result.errorMessage ?? 'Vehicle not found');
       }
     } catch (e) {
       if (!mounted) return;
-      setState(() => _error = 'Connection error');
+      setState(() => _error = 'Connection error — is the backend running?');
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }
@@ -67,7 +68,6 @@ class _LoginScreenState extends State<LoginScreen> {
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              // Icon
               const Icon(
                 Icons.local_shipping_rounded,
                 size: 48,
@@ -99,25 +99,15 @@ class _LoginScreenState extends State<LoginScreen> {
 
               TextField(
                 controller: _vehicleIdCtrl,
-                style:
-                    const TextStyle(color: AppTheme.textHigh, fontSize: 14),
+                style: const TextStyle(color: AppTheme.textHigh, fontSize: 15),
                 decoration: const InputDecoration(
                   labelText: 'Vehicle ID',
-                  prefixIcon: Icon(Icons.badge_rounded,
-                      color: AppTheme.textLow, size: 18),
-                ),
-              ),
-              const SizedBox(height: 12),
-
-              TextField(
-                controller: _passwordCtrl,
-                obscureText: true,
-                style:
-                    const TextStyle(color: AppTheme.textHigh, fontSize: 14),
-                decoration: const InputDecoration(
-                  labelText: 'Password',
-                  prefixIcon: Icon(Icons.lock_rounded,
-                      color: AppTheme.textLow, size: 18),
+                  hintText: 'e.g. V0001',
+                  prefixIcon: Icon(
+                    Icons.badge_rounded,
+                    color: AppTheme.textLow,
+                    size: 18,
+                  ),
                 ),
               ),
 
@@ -126,9 +116,10 @@ class _LoginScreenState extends State<LoginScreen> {
                 Text(
                   _error!,
                   style: const TextStyle(
-                      color: AppTheme.danger,
-                      fontSize: 12,
-                      fontWeight: FontWeight.w500),
+                    color: AppTheme.danger,
+                    fontSize: 13,
+                    fontWeight: FontWeight.w500,
+                  ),
                   textAlign: TextAlign.center,
                 ),
               ],

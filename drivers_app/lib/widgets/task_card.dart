@@ -1,17 +1,16 @@
 import 'package:flutter/material.dart';
 
-import '../models/mission.dart';
+import '../models/task.dart';
 import '../theme/app_theme.dart';
 
-/// A card displaying a single mission.
+/// A card displaying a single task.
 ///
-/// Active mission: expanded with a horizontal timeline bar, details grid,
-/// and a caution strip for special requirements.
-/// Upcoming missions: compact single-row summary.
-class MissionCard extends StatelessWidget {
-  final Mission mission;
+/// Active task (`isCurrent`): expanded with horizontal timeline, details, warnings.
+/// Upcoming tasks: compact single-row summary.
+class TaskCard extends StatelessWidget {
+  final Task task;
 
-  const MissionCard({super.key, required this.mission});
+  const TaskCard({super.key, required this.task});
 
   String _hh(DateTime t) =>
       '${t.hour.toString().padLeft(2, '0')}:${t.minute.toString().padLeft(2, '0')}';
@@ -24,20 +23,21 @@ class MissionCard extends StatelessWidget {
         color: AppTheme.card,
         borderRadius: BorderRadius.circular(AppTheme.r8),
         border: Border.all(
-          color: mission.isCurrent ? AppTheme.primary.withValues(alpha: 0.4) : AppTheme.border,
+          color: task.isCurrent ? AppTheme.primary.withValues(alpha: 0.4) : AppTheme.border,
         ),
       ),
-      child: mission.isCurrent ? _buildExpanded() : _buildCollapsed(),
+      child: task.isCurrent ? _buildExpanded() : _buildCollapsed(),
     );
   }
 
   // ═══════════════════════════════════════════════════════════════════════
-  //  EXPANDED (active mission)
+  //  EXPANDED (active task)
   // ═══════════════════════════════════════════════════════════════════════
 
   Widget _buildExpanded() {
-    final waitMin = mission.unloadingWaitTime.inMinutes;
-    final unloadEnd = mission.endTime.add(mission.unloadingWaitTime);
+    final waitMin = task.unloadingWaitMinutes ?? 0;
+    final endTime = task.endTime;
+    final unloadEnd = endTime?.add(Duration(minutes: waitMin));
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -51,7 +51,7 @@ class MissionCard extends StatelessWidget {
           child: Row(
             children: [
               Text(
-                mission.cargoType,
+                task.cargoType,
                 style: const TextStyle(
                   fontSize: 24,
                   fontWeight: FontWeight.w700,
@@ -87,20 +87,22 @@ class MissionCard extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               // ── Horizontal timeline ───────────────────────────────────
-              _buildHorizontalTimeline(waitMin, unloadEnd),
-              const SizedBox(height: 20),
+              if (task.startTime != null && endTime != null)
+                _buildHorizontalTimeline(waitMin, endTime, unloadEnd),
+              if (task.startTime != null && endTime != null)
+                const SizedBox(height: 20),
 
               // ── Specs row ─────────────────────────────────────────────
               Row(
                 children: [
-                  _specBlock('Weight', _formatWeight(mission.weight)),
+                  _specBlock('Weight', '${task.weight}T'),
                   const SizedBox(width: 24),
-                  _specBlock('Volume', '${mission.volume.toStringAsFixed(0)}L'),
+                  _specBlock('Volume', '${task.volume}m³'),
                 ],
               ),
 
               // ── Special requirements strip ────────────────────────────
-              if (mission.specialRequirements.isNotEmpty) ...[
+              if (task.specialRequirements.isNotEmpty) ...[
                 const SizedBox(height: 16),
                 _buildRequirementsStrip(),
               ],
@@ -111,31 +113,30 @@ class MissionCard extends StatelessWidget {
     );
   }
 
-  /// Horizontal timeline bar:  Origin ●────────●────────● Destination
-  Widget _buildHorizontalTimeline(int waitMin, DateTime unloadEnd) {
+  Widget _buildHorizontalTimeline(int waitMin, DateTime endTime, DateTime? unloadEnd) {
     return Column(
       children: [
         // Times row
         Row(
           children: [
-            Text(_hh(mission.startTime),
+            Text(_hh(task.startTime!),
                 style: const TextStyle(
                     fontSize: 15,
                     fontWeight: FontWeight.w700,
                     color: AppTheme.textHigh,
                     fontFeatures: [FontFeature.tabularFigures()])),
             const Spacer(),
-            if (waitMin > 0)
+            if (waitMin > 0 && unloadEnd != null)
               Padding(
                 padding: const EdgeInsets.only(right: 8),
-                child: Text(_hh(mission.endTime),
+                child: Text(_hh(endTime),
                     style: const TextStyle(
                         fontSize: 14,
                         fontWeight: FontWeight.w600,
                         color: AppTheme.textMid,
                         fontFeatures: [FontFeature.tabularFigures()])),
               ),
-            Text(waitMin > 0 ? _hh(unloadEnd) : _hh(mission.endTime),
+            Text(waitMin > 0 && unloadEnd != null ? _hh(unloadEnd) : _hh(endTime),
                 style: TextStyle(
                     fontSize: 15,
                     fontWeight: FontWeight.w700,
@@ -161,7 +162,7 @@ class MissionCard extends StatelessWidget {
         // Locations row
         Row(
           children: [
-            Text(mission.origin,
+            Text(task.origin,
                 style: const TextStyle(
                     fontSize: 15,
                     fontWeight: FontWeight.w500,
@@ -182,7 +183,7 @@ class MissionCard extends StatelessWidget {
                   const SizedBox(width: 12),
                 ],
               ),
-            Text(mission.destination,
+            Text(task.destination,
                 style: const TextStyle(
                     fontSize: 15,
                     fontWeight: FontWeight.w500,
@@ -235,7 +236,7 @@ class MissionCard extends StatelessWidget {
           const SizedBox(width: 8),
           Expanded(
             child: Text(
-              mission.specialRequirements.join(' · '),
+              task.specialRequirements.join(' · '),
               style: const TextStyle(
                 color: AppTheme.caution,
                 fontWeight: FontWeight.w600,
@@ -250,7 +251,7 @@ class MissionCard extends StatelessWidget {
   }
 
   // ═══════════════════════════════════════════════════════════════════════
-  //  COLLAPSED (upcoming mission)
+  //  COLLAPSED (upcoming task)
   // ═══════════════════════════════════════════════════════════════════════
 
   Widget _buildCollapsed() {
@@ -258,11 +259,10 @@ class MissionCard extends StatelessWidget {
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
       child: Row(
         children: [
-          // Cargo type
           Expanded(
             flex: 3,
             child: Text(
-              mission.cargoType,
+              task.cargoType,
               style: const TextStyle(
                 fontSize: 17,
                 fontWeight: FontWeight.w600,
@@ -270,61 +270,52 @@ class MissionCard extends StatelessWidget {
               ),
             ),
           ),
-
-          // Compact timeline: time range + route
           Expanded(
             flex: 5,
             child: Row(
               children: [
-                // Times column
                 Column(
                   crossAxisAlignment: CrossAxisAlignment.end,
                   children: [
-                    Text(_hh(mission.startTime),
-                        style: const TextStyle(
-                            fontSize: 14,
-                            fontWeight: FontWeight.w600,
-                            color: AppTheme.textHigh,
-                            fontFeatures: [FontFeature.tabularFigures()])),
+                    if (task.startTime != null)
+                      Text(_hh(task.startTime!),
+                          style: const TextStyle(
+                              fontSize: 14,
+                              fontWeight: FontWeight.w600,
+                              color: AppTheme.textHigh,
+                              fontFeatures: [FontFeature.tabularFigures()])),
                     const SizedBox(height: 2),
-                    Text(_hh(mission.endTime),
-                        style: const TextStyle(
-                            fontSize: 14,
-                            fontWeight: FontWeight.w600,
-                            color: AppTheme.textHigh,
-                            fontFeatures: [FontFeature.tabularFigures()])),
+                    if (task.endTime != null)
+                      Text(_hh(task.endTime!),
+                          style: const TextStyle(
+                              fontSize: 14,
+                              fontWeight: FontWeight.w600,
+                              color: AppTheme.textHigh,
+                              fontFeatures: [FontFeature.tabularFigures()])),
                   ],
                 ),
                 const SizedBox(width: 8),
-
-                // Dots + line
                 SizedBox(
                   height: 30,
                   width: 10,
                   child: CustomPaint(
-                    painter: _MiniVerticalLine(
-                      color: AppTheme.textLow,
-                    ),
+                    painter: _MiniVerticalLine(color: AppTheme.textLow),
                   ),
                 ),
                 const SizedBox(width: 8),
-
-                // Locations
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(mission.origin,
+                      Text(task.origin,
                           overflow: TextOverflow.ellipsis,
                           style: const TextStyle(
-                              fontSize: 14,
-                              color: AppTheme.textMid)),
+                              fontSize: 14, color: AppTheme.textMid)),
                       const SizedBox(height: 2),
-                      Text(mission.destination,
+                      Text(task.destination,
                           overflow: TextOverflow.ellipsis,
                           style: const TextStyle(
-                              fontSize: 14,
-                              color: AppTheme.textMid)),
+                              fontSize: 14, color: AppTheme.textMid)),
                     ],
                   ),
                 ),
@@ -335,26 +326,17 @@ class MissionCard extends StatelessWidget {
       ),
     );
   }
-
-  String _formatWeight(double kg) {
-    if (kg >= 1000) return '${(kg / 1000).toStringAsFixed(0)}T';
-    return '${kg.toStringAsFixed(0)}kg';
-  }
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
 //  PAINTERS
 // ═══════════════════════════════════════════════════════════════════════════
 
-/// Horizontal timeline: ●━━━━━━━━━━━━●╌╌╌╌●
 class _HorizontalTimelinePainter extends CustomPainter {
   final bool hasWait;
   final double travelRatio;
 
-  _HorizontalTimelinePainter({
-    required this.hasWait,
-    required this.travelRatio,
-  });
+  _HorizontalTimelinePainter({required this.hasWait, required this.travelRatio});
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -364,15 +346,15 @@ class _HorizontalTimelinePainter extends CustomPainter {
 
     final travelEnd = size.width * travelRatio;
 
-    // Travel line (solid)
     final travelPaint = Paint()
       ..color = AppTheme.primary.withValues(alpha: 0.5)
       ..strokeWidth = 2
       ..strokeCap = StrokeCap.round;
     canvas.drawLine(
-        Offset(dotR + 2, cy), Offset(hasWait ? travelEnd - 2 : size.width - dotR - 2, cy), travelPaint);
+        Offset(dotR + 2, cy),
+        Offset(hasWait ? travelEnd - 2 : size.width - dotR - 2, cy),
+        travelPaint);
 
-    // Wait line (dashed) if present
     if (hasWait) {
       final waitPaint = Paint()
         ..color = AppTheme.caution.withValues(alpha: 0.5)
@@ -388,20 +370,15 @@ class _HorizontalTimelinePainter extends CustomPainter {
         x += dash + gap;
       }
 
-      // Middle dot (arrival)
       canvas.drawCircle(
           Offset(travelEnd, cy), smallDotR, Paint()..color = AppTheme.textMid);
-
-      // End dot (unload done)
       canvas.drawCircle(
           Offset(size.width - dotR, cy), dotR, Paint()..color = AppTheme.caution);
     } else {
-      // End dot
       canvas.drawCircle(
           Offset(size.width - dotR, cy), dotR, Paint()..color = AppTheme.primary);
     }
 
-    // Start dot
     canvas.drawCircle(Offset(dotR, cy), dotR, Paint()..color = AppTheme.primary);
   }
 
@@ -409,7 +386,6 @@ class _HorizontalTimelinePainter extends CustomPainter {
   bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
 }
 
-/// Tiny vertical two-dot connector for collapsed cards.
 class _MiniVerticalLine extends CustomPainter {
   final Color color;
   _MiniVerticalLine({required this.color});
