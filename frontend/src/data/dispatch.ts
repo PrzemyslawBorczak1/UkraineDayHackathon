@@ -23,6 +23,35 @@ export const MISSION_RESULTS: MissionResult[] = [
   { id: "MS-0004", tag: "MEDICAL", route: "Rzeszów Hub 1 → Kyiv Hub 2" },
 ];
 
+// --- Mission form option lists (sourced from missions.csv) -----------------
+
+export const CARGO_TYPES = [
+  "Camp equipment",
+  "Drinking water",
+  "Field beds",
+  "Food supplies",
+  "Fuel",
+  "Generators",
+  "Hygiene supplies",
+  "Medical equipment",
+  "Medical supplies",
+  "Rescue equipment",
+  "Sandbags",
+  "Vaccines / Blood products",
+] as const;
+
+export const VEHICLE_TYPES = [
+  "BDF swap body",
+  "Refrigerated semi",
+  "Rigid truck",
+  "Standard semi",
+  "Van",
+] as const;
+
+export const PRIORITIES = ["Critical", "High", "Medium", "Low"] as const;
+
+// ---------------------------------------------------------------------------
+
 export const ACTIVE_MISSION: MissionDetail = {
   id: "MS-0001",
   status: "QUEUED",
