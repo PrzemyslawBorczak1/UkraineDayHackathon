@@ -1,7 +1,7 @@
-import { StatisticsPage } from "./pages/StatisticsPage";
+import { DispatchPage } from "./pages/DispatchPage";
 
 function App() {
-  return <StatisticsPage />;
+  return <DispatchPage />;
 }
 
 export default App;

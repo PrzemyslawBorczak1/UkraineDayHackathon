@@ -1,11 +1,21 @@
-@import "tailwindcss";
+@import "tailwindcss" source(none);
+@source "../src";
 @import "tw-animate-css";
 
 @custom-variant dark (&:is(.dark *));
 
 /*
- * KORD Logistics design tokens (OKLCH) — see style_guides/kord-styles/STYLES.md.
- * @theme inline maps CSS custom properties to Tailwind utility classes.
+ * Design system definition.
+ *
+ * The @theme inline block maps CSS custom properties to Tailwind utility
+ * classes (e.g. --color-primary -> bg-primary, text-primary).
+ *
+ * The :root and .dark blocks define the actual color values using oklch.
+ * All colors MUST use oklch format.
+ *
+ * To add a new semantic color:
+ * 1. Add the variable to :root (light value) and .dark (dark value)
+ * 2. Register it in @theme inline as --color-<name>: var(--<name>)
  */
 
 @theme inline {
@@ -127,51 +137,8 @@
     border-color: var(--color-border);
   }
 
-  html,
-  body,
-  #root {
-    margin: 0;
-    padding: 0;
-    height: 100%;
-  }
-
   body {
-    background-color: #fafafa;
+    background-color: var(--color-background);
     color: var(--color-foreground);
   }
-}
-
-/* Leaflet marker wrapper used by the truck divIcon. */
-.truck-marker {
-  background: transparent;
-  border: none;
-}
-
-/* Minimal range slider matching the KORD look (flat track, dark thumb). */
-.kord-range {
-  -webkit-appearance: none;
-  appearance: none;
-  height: 4px;
-  border-radius: 9999px;
-  background: #e5e5e5;
-  outline: none;
-  cursor: pointer;
-}
-.kord-range::-webkit-slider-thumb {
-  -webkit-appearance: none;
-  appearance: none;
-  width: 16px;
-  height: 16px;
-  border-radius: 9999px;
-  background: #171717;
-  border: 2px solid #ffffff;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
-}
-.kord-range::-moz-range-thumb {
-  width: 16px;
-  height: 16px;
-  border-radius: 9999px;
-  background: #171717;
-  border: 2px solid #ffffff;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
 }
