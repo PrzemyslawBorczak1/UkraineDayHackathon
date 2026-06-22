@@ -6,15 +6,11 @@ import math
 
 
 class Status(Enum):
-    PASSIVE_WAITING = (
-        1  # Oczekiwanie bez ładunku (np. na otwarcie magazynu załadunkowego)
-    )
-    ACTIVE_WAITING = (
-        2  # Oczekiwanie z ładunkiem (np. na otwarcie magazynu rozładunkowego)
-    )
-    IN_PROGRESS_ACTIVE = 3  # Jazda z ładunkiem (transport)
-    IN_PROGRESS_PASSIVE = 4  # Jazda bez ładunku
-    UNLOADING = 5  # Rozładunek na miejscu docelowym
+    PASSIVE_WAITING = 1
+    ACTIVE_WAITING = 2
+    IN_PROGRESS_ACTIVE = 3
+    IN_PROGRESS_PASSIVE = 4
+    UNLOADING = 5
 
 
 class Priority(Enum):
@@ -111,7 +107,7 @@ class Mission:
 
     stored_in_temp_weight: float = 0.0
     stored_in_temp_volume: float = 0.0
-    bonus: float = 0.0  # Nagroda w punktach za ukończenie misji (niezależna od budżetu)
+    bonus: float = 0.0
 
     def __post_init__(self):
         self.remaining_weight = self.weight
@@ -161,12 +157,9 @@ class TemporaryWarehouse:
     id: str
     location: Location
     expiry: datetime
-    assignments: dict[str, tuple[float, float]] = field(
-        default_factory=dict
-    )  # mission_id -> (weight, volume)
+    assignments: dict[str, tuple[float, float]] = field(default_factory=dict)
 
     def as_warehouse(self) -> Warehouses:
-        """Zwraca obiekt Warehouses reprezentujący ten tymczasowy magazyn (otwarty 24h)."""
         return Warehouses(
             id=self.id,
             location=self.location,
@@ -280,24 +273,25 @@ class Vehicle:
 
         for interval in sorted_intervals:
             if interval.mission_assignment:
-                if (
-                    interval.status == Status.IN_PROGRESS_ACTIVE
-                    and target_time >= interval.end
-                ):
-                    current_loc = (
-                        interval.mission_assignment.mission.destination.location
-                    )
-                elif (
-                    interval.status == Status.UNLOADING and target_time >= interval.end
-                ):
-                    current_loc = (
-                        interval.mission_assignment.mission.destination.location
-                    )
-                elif (
-                    interval.status == Status.IN_PROGRESS_PASSIVE
-                    and target_time >= interval.end
-                ):
-                    current_loc = interval.mission_assignment.mission.origin.location
+                # Po zakończeniu interwału – lokalizacja zależy od statusu
+                if target_time >= interval.end:
+                    if interval.status == Status.IN_PROGRESS_ACTIVE:
+                        current_loc = (
+                            interval.mission_assignment.mission.destination.location
+                        )
+                    elif interval.status == Status.UNLOADING:
+                        current_loc = (
+                            interval.mission_assignment.mission.destination.location
+                        )
+                    elif interval.status == Status.IN_PROGRESS_PASSIVE:
+                        current_loc = (
+                            interval.mission_assignment.mission.origin.location
+                        )
+                    # Dla czekania lokalizacja pozostaje bez zmian
+                else:
+                    # W trakcie interwału – lokalizacja początkowa (dla jazdy) lub poprzednia
+                    # Nie zmieniamy current_loc, więc zostaje ostatnia znana przed tym interwałem
+                    pass
         return current_loc
 
     def get_earliest_available_time(self, after: datetime) -> datetime:
@@ -470,7 +464,7 @@ class DailyALNSScheduler:
 
             if origin_override:
                 arrival_at_origin = possible_start + approach_duration
-                wh_open = arrival_at_origin - timedelta(seconds=1)  # zawsze otwarte
+                wh_open = arrival_at_origin - timedelta(seconds=1)
                 wh_close = arrival_at_origin + timedelta(days=1)
             else:
                 arrival_at_origin = possible_start + approach_duration
@@ -506,7 +500,6 @@ class DailyALNSScheduler:
             if alloc_w <= 0 or alloc_v <= 0:
                 continue
 
-            # Próba opóźnienia wyjazdu (tylko dla stałego magazynu)
             if not origin_override:
                 if arrival_at_origin >= wh_open:
                     ideal_start = wh_dest_open - approach_duration - transit_duration
@@ -957,46 +950,60 @@ def handle_vehicle_breakdown(
     scheduler: DailyALNSScheduler,
     end_date: datetime,
 ):
+    # 1. Znajdź lokalizację awarii (obecna pozycja)
     disruption_loc = vehicle.get_location_at_time(simulation_time)
     temp_wh = None
 
-    for interval in vehicle.timeSchedule[:]:
-        if interval.start >= simulation_time:
-            mission_assignment = interval.mission_assignment
-            if mission_assignment:
-                mission = mission_assignment.mission
-                if temp_wh is None:
-                    for tw in scheduler.temp_warehouses:
-                        if tw.location.distance(disruption_loc) < 0.001:
-                            temp_wh = tw
-                            break
-                    if temp_wh is None:
-                        temp_wh = TemporaryWarehouse(
-                            id=f"TMP_{disruption_loc.latitude}_{disruption_loc.longitude}",
-                            location=disruption_loc,
-                            expiry=simulation_time + timedelta(days=1),
-                        )
-                        scheduler.temp_warehouses.append(temp_wh)
+    # 2. Przerwij wszystkie interwały, które jeszcze trwają lub mają się rozpocząć (end > simulation_time)
+    intervals_to_remove = []
+    for interval in vehicle.timeSchedule:
+        if interval.end > simulation_time:
+            intervals_to_remove.append(interval)
 
-                if mission.id not in temp_wh.assignments:
-                    temp_wh.assignments[mission.id] = (0.0, 0.0)
-                w, v = temp_wh.assignments[mission.id]
-                temp_wh.assignments[mission.id] = (
-                    w + mission_assignment.allocated_weight,
-                    v + mission_assignment.allocated_volume,
+    for interval in intervals_to_remove:
+        vehicle.timeSchedule.remove(interval)
+        if interval.mission_assignment is None:
+            continue  # czas wolny – ignorujemy
+
+        assignment = interval.mission_assignment
+        mission = assignment.mission
+
+        # 3. Znajdź lub utwórz fantomowy magazyn w miejscu awarii
+        if temp_wh is None:
+            for tw in scheduler.temp_warehouses:
+                if tw.location.distance(disruption_loc) < 0.001:
+                    temp_wh = tw
+                    break
+            if temp_wh is None:
+                temp_wh = TemporaryWarehouse(
+                    id=f"TMP_{disruption_loc.latitude}_{disruption_loc.longitude}",
+                    location=disruption_loc,
+                    expiry=simulation_time + timedelta(days=1),
                 )
+                scheduler.temp_warehouses.append(temp_wh)
 
-                mission.stored_in_temp_weight += mission_assignment.allocated_weight
-                mission.stored_in_temp_volume += mission_assignment.allocated_volume
+        # 4. Przenieś ładunek z przerwanego interwału do fantomowego magazynu
+        if mission.id not in temp_wh.assignments:
+            temp_wh.assignments[mission.id] = (0.0, 0.0)
+        w, v = temp_wh.assignments[mission.id]
+        temp_wh.assignments[mission.id] = (
+            w + assignment.allocated_weight,
+            v + assignment.allocated_volume,
+        )
 
-                if vehicle.id in mission.assigned_vehicles:
-                    mission.assigned_vehicles.remove(vehicle.id)
+        # 5. Zaktualizuj stan misji
+        mission.stored_in_temp_weight += assignment.allocated_weight
+        mission.stored_in_temp_volume += assignment.allocated_volume
 
-            vehicle.timeSchedule.remove(interval)
+        # Pojazd nie jest już przypisany (jeśli był)
+        if vehicle.id in mission.assigned_vehicles:
+            mission.assigned_vehicles.remove(vehicle.id)
 
+    # 6. Oznacz pojazd jako zepsuty
     vehicle.is_broken = True
     vehicle.disruption_location = disruption_loc
 
+    # 7. Uruchom ponowne planowanie od czasu awarii
     scheduler._rebuild_unassigned_list()
     scheduler.run_alns(iterations=5, start_date=simulation_time, end_date=end_date)
 
@@ -1033,7 +1040,6 @@ def print_vehicle_working_hours(vehicle: Vehicle):
         end_str = interval.end.strftime("%Y-%m-%d %H:%M")
 
         if interval.mission_assignment is None:
-            # Czyste oczekiwanie – bez misji
             icon = status_icons.get(interval.status, "❓")
             label = status_labels.get(interval.status, str(interval.status))
             print(f" [{start_str} -> {end_str}] {icon} {label}")
