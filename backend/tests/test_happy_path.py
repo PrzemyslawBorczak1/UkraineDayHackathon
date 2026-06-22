@@ -77,7 +77,7 @@ def _make_mission() -> Mission:
         special_requirement="Temperature 2-8°C required",
         available_from=datetime(2026, 6, 22, 16, 0, tzinfo=timezone.utc),
         deadline=datetime(2026, 6, 22, 22, 0, tzinfo=timezone.utc),
-        status=MissionStatus.IN_TRANSIT,
+        status=MissionStatus.IN_PROGRESS,
     )
 
 
@@ -147,11 +147,10 @@ def test_warehouse_summary_shape():
 
 
 def test_mission_happy_path_state_machine():
+    # NEW -> ACCEPTED -> IN_PROGRESS -> DONE
     final = _reduce([
-        EventType.COORDINATOR_FUND,
+        EventType.CARRIER_ACCEPT_MISSION,
         EventType.ALLOCATION_ASSIGNED,
-        EventType.DRIVER_EN_ROUTE,
         EventType.DRIVER_DELIVERED,
-        EventType.SYSTEM_MISSION_ARRIVED,
     ])
-    assert final == MissionStatus.CLOSED
+    assert final == MissionStatus.DONE
