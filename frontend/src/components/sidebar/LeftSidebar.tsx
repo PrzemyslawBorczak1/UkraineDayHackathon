@@ -9,7 +9,6 @@ import {
   type WarehouseFilters,
 } from "../../lib/warehouses";
 import {
-  carrierOptions,
   cargoOptions,
   type MissionFacetKey,
   type MissionFilters,
@@ -106,23 +105,10 @@ function MissionFilterPanel({
   filters: MissionFilters;
   onToggle: (facet: MissionFacetKey, value: string) => void;
 }) {
-  const carriers = carrierOptions(missions, filters);
   const cargos = cargoOptions(missions, filters);
 
   return (
     <>
-      {carriers.length > 0 && (
-        <div className="space-y-2">
-          <SectionLabel>Carrier</SectionLabel>
-          <div className="flex flex-wrap gap-1.5">
-            {carriers.map((c) => (
-              <Chip key={c.id} on={filters.carrier_id.has(c.id)} onClick={() => onToggle("carrier_id", c.id)}>
-                {c.name}
-              </Chip>
-            ))}
-          </div>
-        </div>
-      )}
       {cargos.length > 0 && (
         <div className="space-y-2">
           <SectionLabel>Cargo</SectionLabel>
