@@ -10,6 +10,7 @@ from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import JSONResponse
+from geoalchemy2.shape import to_shape
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
@@ -64,6 +65,14 @@ def _vehicle_restrictions(v: Vehicle) -> list[str]:
     return [s.strip() for s in re.split(r"[;]", v.restriction_note) if s.strip()]
 
 
+def _point(geom) -> Optional[dict]:
+    """PostGIS POINT -> {lat, lng}, or None."""
+    if geom is None:
+        return None
+    p = to_shape(geom)
+    return {"lat": p.y, "lng": p.x}
+
+
 def _task_payload(task: Task) -> dict:
     """Task shaped for the driver app. Cargo/weight/volume/times come from the
     parent mission until task-level metadata exists."""
@@ -76,7 +85,11 @@ def _task_payload(task: Task) -> dict:
         "start_time": _iso_z(m.available_from),
         "end_time": _iso_z(m.deadline),
         "origin": m.origin_point,
+        "origin_address": m.origin_address,
+        "origin_coordinates": _point(m.origin_geom),
         "destination": m.destination_point,
+        "destination_address": m.dest_address,
+        "destination_coordinates": _point(m.dest_geom),
         "weight": m.weight_t,
         "volume": m.volume_m3,
         "special_requirements": special,

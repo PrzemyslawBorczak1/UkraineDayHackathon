@@ -80,26 +80,16 @@ mission for now.
     "start_time": "2026-06-22T16:00:00Z",
     "end_time": "2026-06-22T22:00:00Z",
     "origin": "Warszawa",
+    "origin_address": "ul. Testowa 1",
+    "origin_coordinates": { "lat": 52.2, "lng": 21.0 },
     "destination": "Opole",
+    "destination_address": "ul. Docelowa 2",
+    "destination_coordinates": { "lat": 50.67, "lng": 17.93 },
     "weight": 20,
     "volume": 40,
     "special_requirements": ["Temperature 2-8°C required"],
     "unloading_wait_minutes": null,
     "is_current": true
-  },
-  {
-    "id": 2,
-    "mission_id": "M0002",
-    "cargo_type": "Medicine",
-    "start_time": "2026-06-23T07:00:00Z",
-    "end_time": "2026-06-23T13:00:00Z",
-    "origin": "Łódź",
-    "destination": "Nysa",
-    "weight": 2.5,
-    "volume": 8,
-    "special_requirements": [],
-    "unloading_wait_minutes": null,
-    "is_current": false
   }
 ]
 ```

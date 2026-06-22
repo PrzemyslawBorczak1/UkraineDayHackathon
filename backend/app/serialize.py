@@ -8,7 +8,16 @@ from datetime import datetime, date
 
 from geoalchemy2.elements import WKBElement
 from geoalchemy2.shape import to_shape
+from shapely.geometry import mapping, Point
 from sqlalchemy import inspect as sa_inspect
+
+
+def _geom_to_json(value: WKBElement):
+    """POINT -> {lat, lng}; any other geometry -> GeoJSON dict."""
+    shape = to_shape(value)
+    if isinstance(shape, Point):
+        return {"lat": shape.y, "lng": shape.x}
+    return mapping(shape)
 
 
 def serialize(obj) -> dict:
@@ -17,8 +26,7 @@ def serialize(obj) -> dict:
     for attr in sa_inspect(obj).mapper.column_attrs:
         value = getattr(obj, attr.key)
         if isinstance(value, WKBElement):
-            point = to_shape(value)
-            value = {"lat": point.y, "lng": point.x}
+            value = _geom_to_json(value)
         elif isinstance(value, (datetime, date)):
             value = value.isoformat()
         result[attr.key] = value
