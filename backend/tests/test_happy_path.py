@@ -11,6 +11,8 @@ from app.events import EventType
 from app.events.transitions import STATE_TRANSITIONS
 from app.serialize import serialize
 from app.routers import driver
+from app.routers import warehouses
+from app.models import Warehouse
 
 
 # --------------------------------------------------------------------------- #
@@ -123,6 +125,25 @@ def _reduce(events: list[str]) -> str:
     for event_type in events:
         state = STATE_TRANSITIONS.get((state, event_type), state)
     return state
+
+
+def test_warehouse_summary_shape():
+    w = Warehouse(
+        id="W001", name="Hub Wrocław", city="Wrocław", voivodeship="Dolnośląskie",
+        warehouse_type="Cold storage", cold_storage=True,
+        available_capacity_pct=40, availability_status="Available",
+    )
+    summary = warehouses._summary(w)
+    assert summary == {
+        "id": "W001",
+        "name": "Hub Wrocław",
+        "city": "Wrocław",
+        "voivodeship": "Dolnośląskie",
+        "warehouse_type": "Cold storage",
+        "cold_storage": True,
+        "available_capacity_pct": 40,
+        "availability_status": "Available",
+    }
 
 
 def test_mission_happy_path_state_machine():
