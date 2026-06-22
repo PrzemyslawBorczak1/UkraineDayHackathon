@@ -175,3 +175,20 @@
   border: 2px solid #ffffff;
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
 }
+
+/* Native datetime-local input styled to match the KORD date field. */
+.kord-datetime {
+  color: #171717;
+  color-scheme: light;
+}
+.kord-datetime::-webkit-calendar-picker-indicator {
+  margin-left: 6px;
+  padding: 2px;
+  border-radius: 4px;
+  opacity: 0.55;
+  cursor: pointer;
+  transition: opacity 0.15s ease;
+}
+.kord-datetime::-webkit-calendar-picker-indicator:hover {
+  opacity: 1;
+}

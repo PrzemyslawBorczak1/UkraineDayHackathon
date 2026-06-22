@@ -1,4 +1,4 @@
-import { Badge, CtaPill, SectionLabel, cx } from "../ui";
+import { Badge, SectionLabel, cx } from "../ui";
 
 // Static placeholder mission — swap for the selected mission later.
 const MISSION = {
@@ -116,9 +116,6 @@ export function RightSidebar() {
         </div>
       </div>
 
-      <div className="px-6 py-6 mt-auto">
-        <CtaPill className="w-full">Summary →</CtaPill>
-      </div>
     </div>
   );
 }
