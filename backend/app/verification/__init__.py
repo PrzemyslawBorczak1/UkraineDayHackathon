@@ -14,6 +14,7 @@ from app.verification.engine import (
     VerificationStatus,
     RiskTier,
     evaluate,
+    compute_score,
     APPROVED_SCORE_THRESHOLD,
     INCIDENT_MANUAL_THRESHOLD,
 )
@@ -24,6 +25,7 @@ __all__ = [
     "VerificationStatus",
     "RiskTier",
     "evaluate",
+    "compute_score",
     "APPROVED_SCORE_THRESHOLD",
     "INCIDENT_MANUAL_THRESHOLD",
 ]

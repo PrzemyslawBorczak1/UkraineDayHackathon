@@ -155,3 +155,41 @@ def _verdict(record: VerificationRecord, status: str, reasons: list[str]) -> Ver
         score=record.public_verification_score,
         triggered_rules=reasons,
     )
+
+
+# --- Public Verification Score (composite) ----------------------------------
+#
+# Formula from data_dictionary.csv:
+#   PVS = Reliability×0.4 + DocCompleteness×0.3 + RegistryBonus×0.2 + IncidentScore×0.1
+#
+# RegistryBonus by company registry status: Active and Liquidation are anchored
+# by the dataset; Pending review / Suspended are documented assumptions.
+_REGISTRY_BONUS = {
+    "active": 100,
+    "pending review": 60,
+    "suspended": 30,
+    "liquidation": 0,
+}
+
+
+def compute_score(
+    *,
+    reliability_score: int,
+    documentation_completeness_pct: int,
+    company_registry_status: str,
+    incidents_24m: int,
+) -> int:
+    """Composite Public Verification Score (0-100), per data_dictionary.csv.
+
+    Used when a carrier has no pre-computed score (e.g. a freshly registered
+    company whose public-registry data was just gathered/mocked).
+    """
+    incident_score = max(0, 100 - incidents_24m * 25)
+    registry_bonus = _REGISTRY_BONUS.get(_norm(company_registry_status), 50)
+    raw = (
+        reliability_score * 0.4
+        + documentation_completeness_pct * 0.3
+        + registry_bonus * 0.2
+        + incident_score * 0.1
+    )
+    return max(0, min(100, round(raw)))
