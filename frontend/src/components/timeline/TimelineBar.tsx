@@ -40,12 +40,19 @@ function DateField({
 export function TimelineBar({
   value,
   onChange,
+  cursor,
   onCursorChange,
+  playing,
+  onPlayToggle,
   className,
 }: {
   value?: TimeWindow;
   onChange?: (next: TimeWindow) => void;
+  /** When provided, the playhead is controlled by the parent. */
+  cursor?: Date;
   onCursorChange?: (cursor: Date) => void;
+  playing?: boolean;
+  onPlayToggle?: () => void;
   className?: string;
 }) {
   // Default window: an 8-day span starting "now-ish".
@@ -62,13 +69,16 @@ export function TimelineBar({
     [onChange]
   );
 
-  // Cursor position (ms epoch) somewhere between start and end.
-  const [cursor, setCursor] = useState<number>(() => window.start.getTime());
+  // Cursor position (ms epoch). Controlled by the parent when `cursor` is given,
+  // otherwise tracked internally so the bar still works standalone.
+  const controlledCursor = cursor !== undefined;
+  const [internalCursor, setInternalCursor] = useState<number>(() => window.start.getTime());
 
-  // Keep the cursor inside the window whenever the bounds change.
+  // Keep the internal cursor inside the window whenever the bounds change.
   useEffect(() => {
-    setCursor((c) => clamp(c, window.start.getTime(), window.end.getTime()));
-  }, [window.start, window.end]);
+    if (controlledCursor) return;
+    setInternalCursor((c) => clamp(c, window.start.getTime(), window.end.getTime()));
+  }, [controlledCursor, window.start, window.end]);
 
   const setStart = useCallback(
     (start: Date) => {
@@ -96,13 +106,14 @@ export function TimelineBar({
   const handleScrub = useCallback(
     (next: number) => {
       const clamped = clamp(next, window.start.getTime(), window.end.getTime());
-      setCursor(clamped);
+      if (!controlledCursor) setInternalCursor(clamped);
       onCursorChange?.(new Date(clamped));
     },
-    [window.start, window.end, onCursorChange]
+    [controlledCursor, window.start, window.end, onCursorChange]
   );
 
-  const cursorDate = new Date(clamp(cursor, window.start.getTime(), window.end.getTime()));
+  const cursorMs = controlledCursor ? cursor!.getTime() : internalCursor;
+  const cursorDate = new Date(clamp(cursorMs, window.start.getTime(), window.end.getTime()));
 
   return (
     <HeaderPill
@@ -120,6 +131,15 @@ export function TimelineBar({
       </div>
 
       <div className="flex items-center gap-3">
+        {onPlayToggle && (
+          <button
+            onClick={onPlayToggle}
+            className="shrink-0 size-7 flex items-center justify-center rounded-full bg-neutral-900 text-white text-[11px] hover:bg-neutral-700 transition-colors"
+            aria-label={playing ? "Pause" : "Play"}
+          >
+            {playing ? "❚❚" : "▶"}
+          </button>
+        )}
         <span className="text-[10px] tabular-nums text-neutral-400 shrink-0">
           {formatStamp(window.start)}
         </span>

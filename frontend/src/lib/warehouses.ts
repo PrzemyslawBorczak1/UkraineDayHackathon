@@ -68,7 +68,7 @@ const PALETTE = [
 ];
 
 /** Stable carrier-id → color map (palette wraps for large fleets). */
-export function buildCarrierColors(warehouses: WarehouseSummary[]): Map<string, string> {
-  const ids = [...new Set(warehouses.map((w) => w.carrier_id))].sort();
+export function buildCarrierColors(items: readonly { carrier_id: string }[]): Map<string, string> {
+  const ids = [...new Set(items.map((w) => w.carrier_id))].sort();
   return new Map(ids.map((id, i) => [id, PALETTE[i % PALETTE.length]]));
 }
