@@ -1,64 +1,176 @@
-"""Driver-facing endpoints (MVP, happy path).
+"""Drivers App API (MVP) — implements API_SCHEME.md under /api/v1.
 
-These power the driver/field-operator flow. Work is tracked as Tasks (a part of
-a mission assigned to one vehicle); task endpoints implicitly drive the parent
-mission's state through the event log. Bodies are intentionally omitted for now —
-richer payloads and stricter logic come later.
+Happy-path implementation of the contract the frontend expects: login (by
+vehicle id, no JWT), vehicle details, a vehicle's tasks, and incident reporting.
+Task endpoints implicitly drive the parent mission's state via the event log.
 """
+import re
+from datetime import datetime, timezone
+from typing import Optional
+
 from fastapi import APIRouter, Depends, HTTPException
+from fastapi.responses import JSONResponse
+from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
 from app.database import get_db
-from app.models import Vehicle, Task
+from app.models import Vehicle, Mission, Task
+from app.models.mission import MissionStatus
 from app.events import emit_event, EventType
-from app.serialize import serialize, serialize_list
 
-router = APIRouter(tags=["driver"])
-
-
-@router.get("/tasks/{vehicle_id}")
-def get_tasks_for_vehicle(vehicle_id: str, db: Session = Depends(get_db)):
-    """List all tasks assigned to a given vehicle."""
-    tasks = db.query(Task).filter(Task.vehicle_id == vehicle_id).all()
-    return serialize_list(tasks)
+router = APIRouter(prefix="/api/v1", tags=["driver"])
 
 
-@router.get("/vehicle/{vehicle_id}")
-def get_vehicle(vehicle_id: str, db: Session = Depends(get_db)):
-    """Return info about a vehicle."""
-    vehicle = db.query(Vehicle).filter(Vehicle.id == vehicle_id).first()
+# --------------------------------------------------------------------------- #
+# Request models
+# --------------------------------------------------------------------------- #
+class LoginRequest(BaseModel):
+    vehicle_id: str
+
+
+class IncidentRequest(BaseModel):
+    type: str  # "endMission" | "delay"
+    delay_minutes: Optional[int] = None
+    description: Optional[str] = None
+    reported_at: str
+
+
+# --------------------------------------------------------------------------- #
+# Helpers
+# --------------------------------------------------------------------------- #
+def _iso_z(dt: Optional[datetime]) -> Optional[str]:
+    """ISO 8601 in UTC with a trailing Z, or None."""
+    if dt is None:
+        return None
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=timezone.utc)
+    return dt.astimezone(timezone.utc).isoformat().replace("+00:00", "Z")
+
+
+def _vehicle_features(v: Vehicle) -> list[str]:
+    features: list[str] = []
+    if v.temperature_controlled:
+        features.append("Temperature control")
+    if v.adr_enabled:
+        features.append("ADR (hazmat) certified")
+    if v.liftgate:
+        features.append("Liftgate")
+    return features
+
+
+def _vehicle_restrictions(v: Vehicle) -> list[str]:
+    if not v.restriction_note:
+        return []
+    return [s.strip() for s in re.split(r"[;]", v.restriction_note) if s.strip()]
+
+
+def _task_payload(task: Task) -> dict:
+    """Task shaped for the driver app. Cargo/weight/volume/times come from the
+    parent mission until task-level metadata exists."""
+    m = task.mission
+    special = [m.special_requirement] if m.special_requirement else []
+    return {
+        "id": task.id,
+        "mission_id": m.id,
+        "cargo_type": m.cargo_type,
+        "start_time": _iso_z(m.available_from),
+        "end_time": _iso_z(m.deadline),
+        "origin": m.origin_point,
+        "destination": m.destination_point,
+        "weight": m.weight_t,
+        "volume": m.volume_m3,
+        "special_requirements": special,
+        "unloading_wait_minutes": None,  # task-level metadata, added later
+        "is_current": m.status == MissionStatus.IN_TRANSIT,
+    }
+
+
+# --------------------------------------------------------------------------- #
+# Auth
+# --------------------------------------------------------------------------- #
+@router.post("/auth/login")
+def login(body: LoginRequest, db: Session = Depends(get_db)):
+    """Authenticate a driver by vehicle id (MVP: existence check only)."""
+    vehicle = db.query(Vehicle).filter(Vehicle.id == body.vehicle_id).first()
     if vehicle is None:
-        raise HTTPException(status_code=404, detail=f"Vehicle {vehicle_id} not found")
-    return serialize(vehicle)
+        return JSONResponse(
+            status_code=401,
+            content={"success": False, "error_message": "Invalid credentials"},
+        )
+    return {"success": True, "vehicle_id": vehicle.id}
 
 
-@router.post("/incident/{task_id}")
-def report_incident(task_id: int, db: Session = Depends(get_db)):
-    """Report an incident for a task — implicitly faults the parent mission."""
+# --------------------------------------------------------------------------- #
+# Vehicles
+# --------------------------------------------------------------------------- #
+@router.get("/vehicles/{vehicle_id}")
+def get_vehicle(vehicle_id: str, db: Session = Depends(get_db)):
+    """Retrieve details for a specific vehicle."""
+    v = db.query(Vehicle).filter(Vehicle.id == vehicle_id).first()
+    if v is None:
+        raise HTTPException(status_code=404, detail=f"Vehicle {vehicle_id} does not exist")
+    return {
+        "vehicle_id": v.id,
+        "type": v.vehicle_type,
+        "weight": v.gvw_t,
+        "payload": v.payload_t,
+        "volume": v.volume_m3,
+        "operational_range": v.operational_range_km,
+        "features": _vehicle_features(v),
+        "restrictions": _vehicle_restrictions(v),
+    }
+
+
+# --------------------------------------------------------------------------- #
+# Tasks
+# --------------------------------------------------------------------------- #
+@router.get("/vehicles/{vehicle_id}/tasks")
+def get_vehicle_tasks(vehicle_id: str, db: Session = Depends(get_db)):
+    """Retrieve all tasks assigned to a vehicle."""
+    tasks = db.query(Task).filter(Task.vehicle_id == vehicle_id).all()
+    return [_task_payload(t) for t in tasks]
+
+
+# --------------------------------------------------------------------------- #
+# Incidents
+# --------------------------------------------------------------------------- #
+@router.post("/tasks/{task_id}/incidents", status_code=201)
+def report_incident(task_id: int, body: IncidentRequest, db: Session = Depends(get_db)):
+    """Report an incident on a task (endMission | delay)."""
+    if body.type not in ("endMission", "delay"):
+        raise HTTPException(status_code=400, detail=f"Unknown incident type '{body.type}'")
+    if body.type == "delay" and body.delay_minutes is None:
+        raise HTTPException(status_code=400, detail="delay_minutes is required for delay")
+
     task = db.query(Task).filter(Task.id == task_id).first()
     if task is None:
-        raise HTTPException(status_code=404, detail=f"Task {task_id} not found")
+        raise HTTPException(status_code=404, detail=f"Task {task_id} does not exist")
+
+    event_type = (
+        EventType.DRIVER_DELIVERED
+        if body.type == "endMission"
+        else EventType.CARRIER_REPORT_DELAY
+    )
     event = emit_event(
         db,
         mission_id=task.mission_id,
-        event_type=EventType.DRIVER_REPORT_FAULT,
+        event_type=event_type,
         actor=f"vehicle:{task.vehicle_id}",
-        payload={"task_id": task_id},
+        payload={
+            "task_id": task_id,
+            "incident_type": body.type,
+            "delay_minutes": body.delay_minutes,
+            "description": body.description,
+            "reported_at": body.reported_at,
+        },
     )
-    return serialize(event)
 
-
-@router.patch("/tasks/{task_id}")
-def update_task(task_id: int, db: Session = Depends(get_db)):
-    """Update a task (MVP: mark delivered) — implicitly advances the mission."""
-    task = db.query(Task).filter(Task.id == task_id).first()
-    if task is None:
-        raise HTTPException(status_code=404, detail=f"Task {task_id} not found")
-    emit_event(
-        db,
-        mission_id=task.mission_id,
-        event_type=EventType.DRIVER_DELIVERED,
-        actor=f"vehicle:{task.vehicle_id}",
-        payload={"task_id": task_id},
-    )
-    return serialize(task)
+    return {
+        "id": f"INC-{event.id:03d}",
+        "task_id": task_id,
+        "mission_id": task.mission_id,
+        "type": body.type,
+        "delay_minutes": body.delay_minutes,
+        "description": body.description,
+        "reported_at": body.reported_at,
+    }
