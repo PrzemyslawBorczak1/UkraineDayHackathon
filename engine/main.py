@@ -177,6 +177,7 @@ def calculate_score(
     max_carrier_cost: float = 5000.0,
     active_wait_hours: float = 0.0,
     passive_wait_hours: float = 0.0,
+    vehicle_activation_hours: float = 0.0,
 ) -> float:
     dist_km = vehicle.get_location_at_time(mission.available_from).distance(
         mission.origin.location
@@ -221,6 +222,7 @@ def calculate_score(
 
     penalty_active = active_wait_hours * 1000.0
     penalty_passive = passive_wait_hours * 1.0
+    penalty_activation = vehicle_activation_hours * 2.0
 
     return (
         0.20 * s_dist
@@ -233,6 +235,7 @@ def calculate_score(
         + s_priority
         - penalty_active
         - penalty_passive
+        - penalty_activation
     )
 
 
@@ -252,6 +255,8 @@ class Vehicle:
     is_broken: bool = False
     disruption_location: Location | None = None
     locked_until: datetime | None = None
+
+    has_been_activated: bool = False
 
     @property
     def locationsSchedule(self) -> list[MissionAssignment]:
@@ -319,9 +324,14 @@ class Vehicle:
     def add_intervals(self, intervals: list[TimeInterval]):
         self.timeSchedule.extend(intervals)
         self.timeSchedule.sort(key=lambda x: x.start)
+        if not self.has_been_activated:
+            self.has_been_activated = True
 
 
 class DailyALNSScheduler:
+    DRIVING_LIMIT_HOURS = 4.5
+    BREAK_HOURS = 0.25
+
     def __init__(
         self,
         vehicles: list[Vehicle],
@@ -347,7 +357,13 @@ class DailyALNSScheduler:
     def estimate_mission_duration(self, distance_km: float) -> timedelta:
         if distance_km <= 0.1:
             return timedelta(hours=0.5)
-        return timedelta(hours=(distance_km / 60.0) + 2.0)
+        driving_hours = distance_km / 60.0
+        if driving_hours <= self.DRIVING_LIMIT_HOURS:
+            breaks = 0
+        else:
+            breaks = math.ceil(driving_hours / self.DRIVING_LIMIT_HOURS) - 1
+        total_hours = driving_hours + breaks * self.BREAK_HOURS + 2.0
+        return timedelta(hours=total_hours)
 
     def calculate_daily_spent(self, target_date: datetime) -> float:
         total = 0.0
@@ -418,6 +434,9 @@ class DailyALNSScheduler:
         earliest_start = max(current_date, mission.available_from)
         earliest_start = vehicle.get_earliest_available_time(earliest_start)
 
+        if not vehicle.timeSchedule and not vehicle.has_been_activated:
+            earliest_start += timedelta(hours=vehicle.activation_time)
+
         origin = origin_override if origin_override else mission.origin
         single_trip_cost = vehicle.carrier.price_per_km * mission.route_distance
 
@@ -445,11 +464,11 @@ class DailyALNSScheduler:
             if possible_start >= mission.deadline:
                 break
 
-            # 🔧 Obliczamy dist_to_origin DLA TEGO konkretnego possible_start
             current_loc = vehicle.get_location_at_time(possible_start)
             dist_to_origin = current_loc.distance(origin.location)
-            approach_duration = self.estimate_mission_duration(dist_to_origin)
-
+            approach_duration = self.estimate_mission_duration(
+                dist_to_origin
+            ) - timedelta(hours=2.0)
             arrival_at_origin = possible_start + approach_duration
 
             if origin_override:
@@ -462,7 +481,9 @@ class DailyALNSScheduler:
             if loading_start >= wh_close:
                 continue
 
-            transit_duration = self.estimate_mission_duration(mission.route_distance)
+            transit_duration = self.estimate_mission_duration(
+                mission.route_distance
+            ) - timedelta(hours=2.0)
             delivery_arrival = loading_start + transit_duration
 
             wh_dest_open, wh_dest_close = self._get_warehouse_hours(
@@ -488,7 +509,6 @@ class DailyALNSScheduler:
             if alloc_w <= 0 or alloc_v <= 0:
                 continue
 
-            # Opóźnianie wyjazdu (tylko dla stałego magazynu)
             if not origin_override:
                 if arrival_at_origin >= wh_open:
                     ideal_start = wh_dest_open - approach_duration - transit_duration
@@ -554,11 +574,14 @@ class DailyALNSScheduler:
             active_wait_hours = active_wait.total_seconds() / 3600.0
             passive_wait_hours = passive_wait_before_load.total_seconds() / 3600.0
 
+            veh_act = vehicle.activation_time if not vehicle.has_been_activated else 0.0
+
             score = calculate_score(
                 mission,
                 vehicle,
                 active_wait_hours=active_wait_hours,
                 passive_wait_hours=passive_wait_hours,
+                vehicle_activation_hours=veh_act,
             )
 
             if score > best_score:
@@ -684,7 +707,6 @@ class DailyALNSScheduler:
             next_date = current_date + timedelta(days=1)
             self._clean_expired_temp_warehouses(current_date)
 
-            # 1. Kursy z tymczasowych magazynów
             for mission in self.unassigned_missions[:]:
                 if mission.stored_in_temp_weight > 0:
                     for tw in self.temp_warehouses:
@@ -736,7 +758,6 @@ class DailyALNSScheduler:
                                         if mission in self.unassigned_missions:
                                             self.unassigned_missions.remove(mission)
 
-            # 2. Standardowe planowanie
             available_missions = [
                 m
                 for m in self.unassigned_missions
@@ -861,6 +882,7 @@ class DailyALNSScheduler:
                 vehicle,
                 active_wait_hours=active_hours,
                 passive_wait_hours=passive_hours,
+                vehicle_activation_hours=0.0,
             )
             all_assignments.append(
                 (score, data["assignment"], data["vehicle"], data["intervals"])
