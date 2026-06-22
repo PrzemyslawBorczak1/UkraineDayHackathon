@@ -1,29 +1,24 @@
-/** Types mirroring the carrier-panel backend (app/carrier_panel/schemas.py). */
+/** Types mirroring the carrier-panel backend DB models. */
 
-export type VerificationFields = {
+export type PublicVerification = {
   company_registry_status: string;
   transport_licence_status: string;
   insurance_status: string;
   tax_arrears: string;
   sanctions_screening_result: string;
+  registry_match_quality: string;
   incidents_24m: number;
   documentation_completeness_pct: number;
-  reliability_score: number;
-};
-
-export type Verification = {
-  status: string; // "Approved" | "Manual review" | "Do not use"
-  risk: string; // "Low" | "Medium" | "High"
-  score: number;
-  triggered_rules: string[];
-  fields: VerificationFields;
+  public_verification_score: number;
+  verification_result: string;  // "Approved" | "Manual review" | "Do not use"
+  verification_notes: string | null;
 };
 
 export type Vehicle = {
   id: string;
   carrier_id: string;
   vehicle_type: string;
-  gross_vehicle_weight_t: number;
+  gvw_t: number;
   payload_t: number;
   volume_m3: number;
   temperature_controlled: boolean;
@@ -38,7 +33,7 @@ export type Vehicle = {
 
 export type VehicleCreate = {
   vehicle_type: string;
-  gross_vehicle_weight_t: number;
+  gvw_t: number;
   payload_t: number;
   volume_m3: number;
   temperature_controlled: boolean;
@@ -82,14 +77,14 @@ export type WarehouseCreate = {
 };
 
 export type CompanyUpdate = {
-  name: string;
-  hq_city: string;
-  voivodeship: string;
-  activity_type: string;
-  operating_region: string;
-  preferred_contact_channel: string;
-  declared_activation_time_hours: number;
-  cost_per_km: number;
+  name?: string;
+  hq_city?: string;
+  voivodeship?: string;
+  activity_type?: string;
+  operating_region?: string;
+  preferred_contact_channel?: string;
+  declared_activation_time_hours?: number;
+  cost_per_km?: number;
 };
 
 export type CarrierProfile = {
@@ -99,41 +94,27 @@ export type CarrierProfile = {
   hq_city: string;
   voivodeship: string;
   activity_type: string;
-  operating_region: string;
-  preferred_contact_channel: string;
+  declared_fleet_size: number;
+  declared_warehouse_capacity_m2: number;
+  crisis_participation_status: string;
+  documentation_status: string;
   declared_activation_time_hours: number;
+  reliability_score: number;
+  risk_rating: string;       // "Low" | "Medium" | "High"
   cost_per_km: number;
-  carrier_risk_rating: string | null;
-  source: string; // "seed" | "registered"
-  verification: Verification;
+  preferred_contact_channel: string;
+  operating_region: string;
   vehicles: Vehicle[];
   warehouses: Warehouse[];
+  verification: PublicVerification | null;
 };
 
 export type CarrierSummary = {
   id: string;
   name: string;
   tax_id: string;
-  status: string;
-  source: string;
-};
-
-export type Mission = {
-  id: string;
-  carrier_id: string;
-  title: string;
-  status: string;           // "Active" | "Upcoming" | "Completed"
-  priority: string;         // "Critical" | "High" | "Normal"
-  cargo_type: string;
-  origin_city: string;
-  destination_city: string;
-  assigned_vehicle_ids: string[];
-  assigned_warehouse_id: string | null;
-  start_date: string;       // YYYY-MM-DD
-  end_date: string;
-  coordinator: string;
-  distance_km: number;
-  notes: string | null;
+  crisis_participation_status: string;
+  risk_rating: string;
 };
 
 export type RegisterPayload = {
@@ -146,4 +127,35 @@ export type RegisterPayload = {
   preferred_contact_channel: string;
   declared_activation_time_hours: number;
   cost_per_km: number;
+};
+
+export type TaskSummary = {
+  id: number;
+  vehicle_id: string;
+  mission_id: string;
+};
+
+export type Mission = {
+  id: string;
+  cargo_type: string;
+  origin_point: string;
+  destination_point: string;
+  route_distance_km: number;
+  weight_t: number;
+  volume_m3: number;
+  required_vehicle_type: string;
+  priority: string;          // "Critical" | "High" | "Normal"
+  available_from: string;    // ISO datetime
+  deadline: string;          // ISO datetime
+  estimated_cost: number;
+  status: string;            // raw DB: NEW | ASSIGNED | IN_TRANSIT | DELIVERED | CLOSED | …
+  requesting_authority: string;
+  special_requirement: string | null;
+  certificate_adr: boolean;
+  liftgate: boolean;
+  assigned_vehicle_id: string | null;
+  assigned_carrier_id: string | null;
+  assignment_score: number | null;
+  acceptance_status: string; // "Pending" | "Accepted" | "Rejected"
+  tasks: TaskSummary[];
 };

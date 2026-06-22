@@ -3,32 +3,18 @@
 Runs on its own port so it stays out of the way of the shared backend:
 
     cd backend
-    uvicorn app.carrier_panel.app:app --port 8001 --reload
-
-Needs no database — only the verification engine (pure stdlib) and the CSVs
-for seeding. Point CARRIER_CSV_DIR at the dataset's csv/ folder if it isn't
-found automatically.
+    DATABASE_URL=postgresql+psycopg://crisis:crisis@localhost:5432/crisis \
+      uvicorn app.carrier_panel.app:app --port 8001 --reload
 """
-from contextlib import asynccontextmanager
-
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.carrier_panel import store
 from app.carrier_panel.router import router
-
-
-@asynccontextmanager
-async def lifespan(app: FastAPI):
-    store.seed()
-    yield
-
 
 app = FastAPI(
     title="Carrier Panel API",
     description="Self-service registration + verification for logistics operators",
-    version="0.1.0",
-    lifespan=lifespan,
+    version="0.2.0",
 )
 
 app.add_middleware(
@@ -42,7 +28,7 @@ app.add_middleware(
 
 @app.get("/api/health")
 def health():
-    return {"status": "ok", "carriers_loaded": len(store.list_companies())}
+    return {"status": "ok"}
 
 
 app.include_router(router)

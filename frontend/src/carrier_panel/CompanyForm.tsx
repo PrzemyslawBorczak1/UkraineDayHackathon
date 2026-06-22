@@ -32,7 +32,7 @@ export function CompanyForm({ initial, onSubmit, onCancel }: {
   };
 
   // Ensure the current value is selectable even if it isn't in the preset list.
-  const withCurrent = (list: string[], v: string) => (list.includes(v) ? list : [v, ...list]);
+  const withCurrent = (list: string[], v: string | undefined) => (!v || list.includes(v) ? list : [v, ...list]);
 
   return (
     <form className="cp-form" onSubmit={submit}>

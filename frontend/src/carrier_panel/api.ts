@@ -91,3 +91,15 @@ export function getMissions(carrierId: string): Promise<Mission[]> {
   return fetch(`${BASE}/api/carriers/${carrierId}/missions`).then((r) => json<Mission[]>(r));
 }
 
+export function updateMissionAcceptance(
+  carrierId: string,
+  missionId: string,
+  acceptance_status: "Accepted" | "Rejected" | "Pending",
+): Promise<Mission> {
+  return fetch(`${BASE}/api/carriers/${carrierId}/missions/${missionId}/acceptance`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ acceptance_status }),
+  }).then((r) => json<Mission>(r));
+}
+

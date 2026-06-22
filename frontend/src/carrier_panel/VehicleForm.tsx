@@ -5,11 +5,11 @@ export const VEHICLE_TYPES = ["Van", "Rigid truck", "Standard semi", "Refrigerat
 
 // Per-type defaults so adding a vehicle is mostly one click.
 export const VEHICLE_PRESETS: Record<string, Partial<VehicleCreate>> = {
-  "Van": { gross_vehicle_weight_t: 3.5, payload_t: 1.2, volume_m3: 10, operational_range_km: 300, temperature_controlled: false },
-  "Rigid truck": { gross_vehicle_weight_t: 18, payload_t: 8, volume_m3: 45, operational_range_km: 500, temperature_controlled: false },
-  "Standard semi": { gross_vehicle_weight_t: 40, payload_t: 24, volume_m3: 88, operational_range_km: 900, temperature_controlled: false },
-  "Refrigerated semi": { gross_vehicle_weight_t: 40, payload_t: 22, volume_m3: 80, operational_range_km: 900, temperature_controlled: true },
-  "BDF swap body": { gross_vehicle_weight_t: 40, payload_t: 22, volume_m3: 90, operational_range_km: 800, temperature_controlled: false },
+  "Van": { gvw_t: 3.5, payload_t: 1.2, volume_m3: 10, operational_range_km: 300, temperature_controlled: false },
+  "Rigid truck": { gvw_t: 18, payload_t: 8, volume_m3: 45, operational_range_km: 500, temperature_controlled: false },
+  "Standard semi": { gvw_t: 40, payload_t: 24, volume_m3: 88, operational_range_km: 900, temperature_controlled: false },
+  "Refrigerated semi": { gvw_t: 40, payload_t: 22, volume_m3: 80, operational_range_km: 900, temperature_controlled: true },
+  "BDF swap body": { gvw_t: 40, payload_t: 22, volume_m3: 90, operational_range_km: 800, temperature_controlled: false },
 };
 
 export function blankVehicle(defaultCity: string, activation: number): VehicleCreate {
@@ -70,8 +70,8 @@ export function VehicleForm({ initial, submitLabel, onSubmit, onCancel }: {
         </div>
         <div className="cp-field">
           <label>Gross weight (t)</label>
-          <input className="cp-input" type="number" step={0.1} min={0} value={form.gross_vehicle_weight_t}
-            onChange={(e) => set("gross_vehicle_weight_t", Number(e.target.value))} />
+          <input className="cp-input" type="number" step={0.1} min={0} value={form.gvw_t}
+            onChange={(e) => set("gvw_t", Number(e.target.value))} />
         </div>
         <div className="cp-field">
           <label>Operational range (km)</label>

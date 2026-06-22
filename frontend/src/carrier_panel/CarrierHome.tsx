@@ -40,14 +40,16 @@ export function CarrierHome({ profile, onLogout }: { profile: CarrierProfile; on
   const [editProfile, setEditProfile] = useState(false);
 
   const v = prof.verification;
-  const statusColor = STATUS_COLOR[v.status] ?? "#6b7280";
-  const riskColor = RISK_COLOR[v.risk] ?? "#6b7280";
-  const f = v.fields;
-  const fieldOrder: (keyof typeof f)[] = [
+  const statusColor = STATUS_COLOR[v?.verification_result ?? ""] ?? "#6b7280";
+  const riskColor = RISK_COLOR[prof.risk_rating] ?? "#6b7280";
+  const triggeredRules = v?.verification_notes
+    ? v.verification_notes.split(", ").filter(Boolean)
+    : ["clean"];
+  const fieldOrder = [
     "company_registry_status", "transport_licence_status", "insurance_status",
     "tax_arrears", "sanctions_screening_result", "incidents_24m",
-    "documentation_completeness_pct", "reliability_score",
-  ];
+    "documentation_completeness_pct", "registry_match_quality",
+  ] as const;
 
   const upsert = <T extends { id: string }>(item: T) => (prev: T[]) =>
     prev.some((x) => x.id === item.id) ? prev.map((x) => (x.id === item.id ? item : x)) : [...prev, item];
@@ -70,8 +72,6 @@ export function CarrierHome({ profile, onLogout }: { profile: CarrierProfile; on
           <h1 className="cp-h1">{prof.name}</h1>
           <p className="cp-sub">
             {prof.id} · {prof.tax_id} · {prof.hq_city}, {prof.voivodeship}
-            {prof.source === "registered" &&
-              <span className="cp-badge-soft" style={{ marginLeft: 10 }}>just registered</span>}
           </p>
         </div>
 
@@ -87,22 +87,22 @@ export function CarrierHome({ profile, onLogout }: { profile: CarrierProfile; on
             <div className="cp-card cp-card-pad-lg cp-verdict" style={{ ["--cp-accent-line" as string]: statusColor }}>
               <p className="cp-card-title">Verification status</p>
               <div className="cp-verdict-head">
-                <span className="cp-pill" style={{ background: statusColor }}><span className="dot" />{v.status}</span>
-                <span className="cp-meta-chip">Risk <strong style={{ color: riskColor }}>{v.risk}</strong></span>
+                <span className="cp-pill" style={{ background: statusColor }}><span className="dot" />{v?.verification_result ?? "—"}</span>
+                <span className="cp-meta-chip">Risk <strong style={{ color: riskColor }}>{prof.risk_rating}</strong></span>
               </div>
               <div className="cp-score-wrap">
                 <div className="cp-score-top">
                   <span className="cp-score-label">Verification score</span>
-                  <span className="cp-score-num">{v.score}<span style={{ color: "var(--cp-faint)", fontWeight: 500 }}>/100</span></span>
+                  <span className="cp-score-num">{v?.public_verification_score ?? 0}<span style={{ color: "var(--cp-faint)", fontWeight: 500 }}>/100</span></span>
                 </div>
                 <div className="cp-score-track">
-                  <div className="cp-score-fill" style={{ width: `${v.score}%`, background: statusColor }} />
+                  <div className="cp-score-fill" style={{ width: `${v?.public_verification_score ?? 0}%`, background: statusColor }} />
                 </div>
               </div>
               <div style={{ marginTop: 20 }}>
                 <p className="cp-card-title" style={{ marginBottom: 8 }}>Why</p>
                 <ul className="cp-reasons">
-                  {v.triggered_rules.map((r) => (
+                  {triggeredRules.map((r: string) => (
                     <li key={r} className={`cp-reason ${reasonTone(r)}`}><span className="bar" />{reasonLabel(r)}</li>
                   ))}
                 </ul>
@@ -112,9 +112,9 @@ export function CarrierHome({ profile, onLogout }: { profile: CarrierProfile; on
             <div className="cp-card">
               <p className="cp-card-title">Data from public registries · auto-retrieved</p>
               <div className="cp-rows">
-                {fieldOrder.map((key) => (
-                  <Row key={key} label={FIELD_LABEL[key]}
-                    chip={<span className={`cp-chip ${fieldTone(key, f[key])}`}>{fieldDisplay(key, f[key])}</span>} />
+                {v && fieldOrder.map((key) => (
+                  <Row key={key} label={FIELD_LABEL[key as keyof typeof FIELD_LABEL] ?? key}
+                    chip={<span className={`cp-chip ${fieldTone(key, String(v[key]))}`}>{fieldDisplay(key, v[key])}</span>} />
                 ))}
               </div>
             </div>
@@ -127,7 +127,7 @@ export function CarrierHome({ profile, onLogout }: { profile: CarrierProfile; on
                 <Row label="Preferred contact" value={prof.preferred_contact_channel} />
                 <Row label="Declared activation time" value={`${prof.declared_activation_time_hours} h`} />
                 <Row label="Cost per km" value={`${prof.cost_per_km} PLN`} />
-                {prof.carrier_risk_rating && <Row label="Carrier risk rating" value={prof.carrier_risk_rating} />}
+                <Row label="Risk rating" value={prof.risk_rating} />
               </div>
             </div>
           </>

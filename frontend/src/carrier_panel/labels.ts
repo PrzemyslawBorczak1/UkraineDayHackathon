@@ -35,7 +35,7 @@ export const FIELD_LABEL: Record<string, string> = {
   sanctions_screening_result: "Sanctions screening",
   incidents_24m: "Incidents (24 mo.)",
   documentation_completeness_pct: "Documentation completeness",
-  reliability_score: "Reliability score",
+  registry_match_quality: "Registry match quality",
 };
 
 export function reasonLabel(rule: string): string {

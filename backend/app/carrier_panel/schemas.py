@@ -1,15 +1,19 @@
-"""Pydantic models for the carrier panel API."""
+"""Pydantic schemas for the carrier panel API.
+
+Response models use from_attributes=True to be built directly from SQLAlchemy
+model instances. Field names match the DB columns exactly.
+"""
+from datetime import datetime
 from typing import Optional
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
+
+# ---------------------------------------------------------------------------
+# Request models (input validation only)
+# ---------------------------------------------------------------------------
 
 class RegisterRequest(BaseModel):
-    """Lightweight data a company provides at registration.
-
-    Deliberately company-level only — no per-vehicle fleet. Vehicles and
-    warehouses are added later, after login.
-    """
     name: str = Field(..., min_length=2)
     tax_id: str = Field(..., description="NIP, e.g. PL1234567890")
     hq_city: str
@@ -21,48 +25,9 @@ class RegisterRequest(BaseModel):
     cost_per_km: float = Field(..., gt=0)
 
 
-class VerificationFields(BaseModel):
-    """The raw 'public-registry' data — real for seeded carriers, mocked for new ones."""
-    company_registry_status: str
-    transport_licence_status: str
-    insurance_status: str
-    tax_arrears: str
-    sanctions_screening_result: str
-    incidents_24m: int
-    documentation_completeness_pct: int
-    reliability_score: int
-
-
-class Verification(BaseModel):
-    status: str
-    risk: str
-    score: int
-    triggered_rules: list[str]
-    fields: VerificationFields
-
-
-# --- Fleet & warehouses (Phase 2) -------------------------------------------
-
-class Vehicle(BaseModel):
-    id: str
-    carrier_id: str
-    vehicle_type: str
-    gross_vehicle_weight_t: float
-    payload_t: float
-    volume_m3: int
-    temperature_controlled: bool
-    adr_enabled: bool
-    liftgate: bool
-    current_city: str
-    availability_status: str
-    activation_time_hours: int
-    operational_range_km: int
-    restriction_note: Optional[str] = None
-
-
 class VehicleCreate(BaseModel):
     vehicle_type: str
-    gross_vehicle_weight_t: float = Field(..., gt=0)
+    gvw_t: float = Field(..., gt=0)
     payload_t: float = Field(..., gt=0)
     volume_m3: int = Field(..., gt=0)
     temperature_controlled: bool = False
@@ -74,21 +39,19 @@ class VehicleCreate(BaseModel):
     restriction_note: Optional[str] = None
 
 
-class Warehouse(BaseModel):
-    id: str
-    carrier_id: str
-    name: str
-    city: str
-    voivodeship: str
-    warehouse_type: str
-    area_m2: int
-    dock_doors: int
-    cold_storage: bool
-    on_site_security: bool
-    operating_hours: str
-    available_capacity_pct: int
-    availability_status: str
-    activation_time_hours: int
+class VehicleUpdate(BaseModel):
+    vehicle_type: Optional[str] = None
+    gvw_t: Optional[float] = None
+    payload_t: Optional[float] = None
+    volume_m3: Optional[int] = None
+    temperature_controlled: Optional[bool] = None
+    adr_enabled: Optional[bool] = None
+    liftgate: Optional[bool] = None
+    current_city: Optional[str] = None
+    activation_time_hours: Optional[int] = None
+    operational_range_km: Optional[int] = None
+    restriction_note: Optional[str] = None
+    availability_status: Optional[str] = None
 
 
 class WarehouseCreate(BaseModel):
@@ -105,24 +68,7 @@ class WarehouseCreate(BaseModel):
     activation_time_hours: int = Field(..., ge=0, le=72)
 
 
-class VehicleUpdate(BaseModel):
-    """Partial vehicle edit — only provided fields are applied."""
-    vehicle_type: Optional[str] = None
-    gross_vehicle_weight_t: Optional[float] = None
-    payload_t: Optional[float] = None
-    volume_m3: Optional[int] = None
-    temperature_controlled: Optional[bool] = None
-    adr_enabled: Optional[bool] = None
-    liftgate: Optional[bool] = None
-    current_city: Optional[str] = None
-    activation_time_hours: Optional[int] = None
-    operational_range_km: Optional[int] = None
-    restriction_note: Optional[str] = None
-    availability_status: Optional[str] = None
-
-
 class WarehouseUpdate(BaseModel):
-    """Partial warehouse edit — only provided fields are applied."""
     name: Optional[str] = None
     city: Optional[str] = None
     voivodeship: Optional[str] = None
@@ -134,10 +80,10 @@ class WarehouseUpdate(BaseModel):
     operating_hours: Optional[str] = None
     available_capacity_pct: Optional[int] = None
     activation_time_hours: Optional[int] = None
+    availability_status: Optional[str] = None
 
 
 class CompanyUpdate(BaseModel):
-    """Editable declared company fields (does not re-run verification)."""
     name: Optional[str] = None
     hq_city: Optional[str] = None
     voivodeship: Optional[str] = None
@@ -148,47 +94,133 @@ class CompanyUpdate(BaseModel):
     cost_per_km: Optional[float] = None
 
 
-class CarrierProfile(BaseModel):
+# ---------------------------------------------------------------------------
+# Response models — mirror DB models 1:1
+# ---------------------------------------------------------------------------
+
+class VehicleOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: str
+    carrier_id: str
+    vehicle_type: str
+    gvw_t: float
+    payload_t: float
+    volume_m3: int
+    temperature_controlled: bool
+    adr_enabled: bool
+    liftgate: bool
+    current_city: str
+    availability_status: str
+    activation_time_hours: int
+    operational_range_km: int
+    restriction_note: Optional[str] = None
+
+
+class WarehouseOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: str
+    carrier_id: str
+    name: str
+    city: str
+    voivodeship: str
+    warehouse_type: str
+    area_m2: int
+    dock_doors: int
+    cold_storage: bool
+    on_site_security: bool
+    operating_hours: str
+    available_capacity_pct: int
+    availability_status: str
+    activation_time_hours: int
+
+
+class PublicVerificationOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    company_registry_status: str
+    transport_licence_status: str
+    insurance_status: str
+    tax_arrears: str
+    sanctions_screening_result: str
+    registry_match_quality: str
+    incidents_24m: int
+    documentation_completeness_pct: int
+    public_verification_score: int
+    verification_result: str
+    verification_notes: Optional[str] = None
+
+
+class CarrierOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
     id: str
     name: str
     tax_id: str
     hq_city: str
     voivodeship: str
     activity_type: str
-    operating_region: str
-    preferred_contact_channel: str
+    declared_fleet_size: int
+    declared_warehouse_capacity_m2: int
+    crisis_participation_status: str
+    documentation_status: str
     declared_activation_time_hours: int
+    reliability_score: int
+    risk_rating: str
     cost_per_km: float
-    carrier_risk_rating: Optional[str] = None  # only known for seeded carriers
-    source: str  # "seed" | "registered"
-    verification: Verification
-    vehicles: list[Vehicle] = Field(default_factory=list)
-    warehouses: list[Warehouse] = Field(default_factory=list)
+    preferred_contact_channel: str
+    operating_region: str
+    vehicles: list[VehicleOut] = Field(default_factory=list)
+    warehouses: list[WarehouseOut] = Field(default_factory=list)
+    verification: Optional[PublicVerificationOut] = None
 
 
-class CarrierSummary(BaseModel):
-    """Compact entry for the login / company-picker list."""
+class CarrierSummaryOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
     id: str
     name: str
     tax_id: str
-    status: str
-    source: str
+    crisis_participation_status: str
+    risk_rating: str
 
 
-class Mission(BaseModel):
-    """A logistics mission assigned to a carrier by a coordinator."""
+# ---------------------------------------------------------------------------
+# Mission + Task response models — mirror DB models
+# ---------------------------------------------------------------------------
+
+class TaskOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    vehicle_id: str
+    mission_id: str
+
+
+class MissionOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
     id: str
-    carrier_id: str
-    title: str
-    status: str               # "Active" | "Upcoming" | "Completed"
-    priority: str             # "Critical" | "High" | "Normal"
     cargo_type: str
-    origin_city: str
-    destination_city: str
-    assigned_vehicle_ids: list[str] = Field(default_factory=list)
-    assigned_warehouse_id: Optional[str] = None
-    start_date: str           # YYYY-MM-DD
-    end_date: str             # YYYY-MM-DD
-    coordinator: str
-    distance_km: int
-    notes: Optional[str] = None
+    origin_point: str
+    destination_point: str
+    route_distance_km: int
+    weight_t: float
+    volume_m3: float
+    required_vehicle_type: str
+    priority: str
+    available_from: datetime
+    deadline: datetime
+    estimated_cost: float
+    status: str
+    requesting_authority: str
+    special_requirement: Optional[str] = None
+    certificate_adr: bool
+    liftgate: bool
+    assigned_vehicle_id: Optional[str] = None
+    assigned_carrier_id: Optional[str] = None
+    assignment_score: Optional[float] = None
+    # In-memory acceptance decision — not stored in DB
+    acceptance_status: str = "Pending"
+    tasks: list[TaskOut] = Field(default_factory=list)

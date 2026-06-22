@@ -67,7 +67,7 @@ export function CarrierApp() {
               onChange={(e) => setPicked(e.target.value)}
               style={{ minWidth: 320, flex: 1 }}>
               {existing.map((c) => (
-                <option key={c.id} value={c.id}>{c.id} — {c.name} ({c.status})</option>
+                <option key={c.id} value={c.id}>{c.id} — {c.name} ({c.crisis_participation_status})</option>
               ))}
             </select>
             <button className="cp-btn cp-btn-primary" onClick={loginExisting}

@@ -13,7 +13,7 @@ type ModalState = { mode: "add" } | { mode: "view" | "edit"; vehicle: Vehicle } 
 function toCreate(v: Vehicle): VehicleCreate {
   return {
     vehicle_type: v.vehicle_type,
-    gross_vehicle_weight_t: v.gross_vehicle_weight_t,
+    gvw_t: v.gvw_t,
     payload_t: v.payload_t,
     volume_m3: v.volume_m3,
     temperature_controlled: v.temperature_controlled,
@@ -120,7 +120,7 @@ export function VehiclesSection({ carrierId, vehicles, defaultCity, defaultActiv
             <Row label="Current city" value={modal.vehicle.current_city} />
             <Row label="Payload" value={`${modal.vehicle.payload_t} t`} />
             <Row label="Volume" value={`${modal.vehicle.volume_m3} m³`} />
-            <Row label="Gross weight" value={`${modal.vehicle.gross_vehicle_weight_t} t`} />
+            <Row label="Gross weight" value={`${modal.vehicle.gvw_t} t`} />
             <Row label="Operational range" value={`${modal.vehicle.operational_range_km} km`} />
             <Row label="Activation time" value={`${modal.vehicle.activation_time_hours} h`} />
             <Row label="Temperature controlled" value={yesNo(modal.vehicle.temperature_controlled)} />

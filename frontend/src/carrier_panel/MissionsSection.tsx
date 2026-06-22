@@ -1,14 +1,31 @@
 import { useEffect, useState } from "react";
-import { getMissions } from "./api";
+import { getMissions, updateMissionAcceptance } from "./api";
 import { availabilityTone } from "./labels";
 import { Modal } from "./Modal";
-import type { Mission, Vehicle } from "./types";
+import type { Mission, TaskSummary, Vehicle } from "./types";
 
+// Raw DB statuses → color
 const STATUS_COLOR: Record<string, string> = {
-  Active:    "#22c55e",
-  Upcoming:  "#f59e0b",
-  Completed: "#9ca3af",
+  NEW:        "#94a3b8",
+  PENDING:    "#94a3b8",
+  FUNDED:     "#60a5fa",
+  QUEUED:     "#a78bfa",
+  DEFERRED:   "#f87171",
+  ASSIGNED:   "#f59e0b",
+  IN_TRANSIT: "#22c55e",
+  INCIDENT:   "#ef4444",
+  REASSIGN:   "#f97316",
+  DELIVERED:  "#10b981",
+  CLOSED:     "#6b7280",
 };
+
+// Grouping order for display
+const STATUS_GROUPS: { label: string; statuses: string[] }[] = [
+  { label: "In transit",  statuses: ["IN_TRANSIT", "INCIDENT", "REASSIGN"] },
+  { label: "Assigned",    statuses: ["ASSIGNED"] },
+  { label: "Upcoming",    statuses: ["FUNDED", "QUEUED", "NEW", "PENDING", "DEFERRED"] },
+  { label: "Completed",   statuses: ["DELIVERED", "CLOSED"] },
+];
 
 const PRIORITY_TONE: Record<string, string> = {
   Critical: "bad",
@@ -16,24 +33,11 @@ const PRIORITY_TONE: Record<string, string> = {
   Normal:   "neutral",
 };
 
-const STATUS_ORDER = ["Active", "Upcoming", "Completed"];
-
-function daysDiff(from: string, to: string): number {
-  return Math.round((new Date(to).getTime() - new Date(from).getTime()) / 86_400_000);
-}
-
-function timeBadge(m: Mission): string | null {
-  const today = new Date().toISOString().slice(0, 10);
-  if (m.status === "Active") {
-    const rem = daysDiff(today, m.end_date);
-    return rem <= 0 ? "ends today" : `${rem}d remaining`;
-  }
-  if (m.status === "Upcoming") {
-    const in_ = daysDiff(today, m.start_date);
-    return in_ <= 0 ? "starts today" : `starts in ${in_}d`;
-  }
-  return null;
-}
+const ACCEPTANCE_STYLE: Record<string, { bg: string; color: string }> = {
+  Pending:  { bg: "#fef3c7", color: "#92400e" },
+  Accepted: { bg: "#dcfce7", color: "#166534" },
+  Rejected: { bg: "#fee2e2", color: "#991b1b" },
+};
 
 function VRow({ label, value }: { label: string; value: React.ReactNode }) {
   return (
@@ -51,15 +55,15 @@ function VehicleModal({ vehicle, onClose }: { vehicle: Vehicle; onClose: () => v
             {vehicle.availability_status}
           </span>
         } />
-        <VRow label="Current city" value={vehicle.current_city} />
-        <VRow label="Payload" value={`${vehicle.payload_t} t`} />
-        <VRow label="Volume" value={`${vehicle.volume_m3} m³`} />
-        <VRow label="Gross weight" value={`${vehicle.gross_vehicle_weight_t} t`} />
-        <VRow label="Operational range" value={`${vehicle.operational_range_km} km`} />
-        <VRow label="Activation time" value={`${vehicle.activation_time_hours} h`} />
+        <VRow label="Current city"       value={vehicle.current_city} />
+        <VRow label="Payload"            value={`${vehicle.payload_t} t`} />
+        <VRow label="Volume"             value={`${vehicle.volume_m3} m³`} />
+        <VRow label="Gross weight"       value={`${vehicle.gvw_t} t`} />
+        <VRow label="Operational range"  value={`${vehicle.operational_range_km} km`} />
+        <VRow label="Activation time"    value={`${vehicle.activation_time_hours} h`} />
         <VRow label="Temperature controlled" value={yesNo(vehicle.temperature_controlled)} />
-        <VRow label="ADR enabled" value={yesNo(vehicle.adr_enabled)} />
-        <VRow label="Liftgate" value={yesNo(vehicle.liftgate)} />
+        <VRow label="ADR enabled"        value={yesNo(vehicle.adr_enabled)} />
+        <VRow label="Liftgate"           value={yesNo(vehicle.liftgate)} />
         {vehicle.restriction_note && <VRow label="Restriction note" value={vehicle.restriction_note} />}
       </div>
       <div className="cp-dialog-actions">
@@ -69,13 +73,37 @@ function VehicleModal({ vehicle, onClose }: { vehicle: Vehicle; onClose: () => v
   );
 }
 
-function MissionCard({ m, vehicleMap, onVehicleClick }: {
+function TasksTable({ tasks }: { tasks: TaskSummary[] }) {
+  if (tasks.length === 0) return null;
+  return (
+    <div style={{ marginTop: 10, borderTop: "1px solid var(--cp-line, #e7e9ee)", paddingTop: 8 }}>
+      <div style={{ fontSize: 11, fontWeight: 700, color: "var(--cp-faint)", textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 6 }}>
+        Tasks ({tasks.length})
+      </div>
+      <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+        {tasks.map((t) => (
+          <div key={t.id} style={{
+            display: "flex", alignItems: "center", gap: 8,
+            background: "var(--cp-line-soft, #f8fafc)", borderRadius: 4, padding: "4px 8px",
+            fontSize: 12,
+          }}>
+            <span style={{ color: "var(--cp-faint)", minWidth: 32 }}>#{t.id}</span>
+            <span className="cp-chip neutral" style={{ fontFamily: "monospace" }}>{t.vehicle_id}</span>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function MissionCard({ m, vehicleMap, onVehicleClick, onAcceptanceChange }: {
   m: Mission;
   vehicleMap: Map<string, Vehicle>;
   onVehicleClick: (v: Vehicle) => void;
+  onAcceptanceChange: (missionId: string, status: "Accepted" | "Rejected") => void;
 }) {
-  const accentColor = STATUS_COLOR[m.status] ?? "#9ca3af";
-  const badge = timeBadge(m);
+  const accentColor = STATUS_COLOR[m.status] ?? "#94a3b8";
+  const acceptStyle = ACCEPTANCE_STYLE[m.acceptance_status] ?? ACCEPTANCE_STYLE["Pending"];
 
   return (
     <div className="cp-card cp-card-pad-lg" style={{
@@ -90,50 +118,72 @@ function MissionCard({ m, vehicleMap, onVehicleClick }: {
             </span>
             <span className={`cp-chip ${PRIORITY_TONE[m.priority] ?? "neutral"}`}>{m.priority}</span>
             <span className="cp-chip neutral">{m.cargo_type}</span>
-            {badge && (
-              <span style={{ fontSize: 11, color: accentColor, fontWeight: 600, marginLeft: 2 }}>{badge}</span>
-            )}
+            <span style={{
+              fontSize: 11, fontWeight: 700, padding: "2px 8px", borderRadius: 4,
+              background: acceptStyle.bg, color: acceptStyle.color,
+            }}>
+              {m.acceptance_status}
+            </span>
           </div>
-          <div style={{ fontWeight: 600, fontSize: 14, color: "var(--cp-text, #0f172a)", marginBottom: 4 }}>{m.title}</div>
+          <div style={{ fontWeight: 600, fontSize: 14, color: "var(--cp-text, #0f172a)", marginBottom: 4 }}>
+            {m.cargo_type} — {m.origin_point} → {m.destination_point}
+          </div>
           <div style={{ fontSize: 13, color: "var(--cp-faint)", marginBottom: 8 }}>
-            {m.origin_city} → {m.destination_city} · {m.distance_km} km
+            {m.origin_point} → {m.destination_point} · {m.route_distance_km} km
           </div>
         </div>
         <div style={{ fontSize: 12, color: "var(--cp-faint)", textAlign: "right", whiteSpace: "nowrap" }}>
-          <div>{m.start_date}</div>
-          <div>{m.end_date}</div>
+          <div>{m.available_from.slice(0, 10)}</div>
+          <div>{m.deadline.slice(0, 10)}</div>
         </div>
       </div>
 
       <div className="cp-rows" style={{ marginTop: 4 }}>
-        <VRow label="Coordinator" value={m.coordinator} />
+        <VRow label="Authority" value={m.requesting_authority} />
+        <VRow label="Weight" value={`${m.weight_t} t`} />
+        <VRow label="Volume" value={`${m.volume_m3} m³`} />
+        <VRow label="Est. cost" value={`${m.estimated_cost.toLocaleString()} PLN`} />
 
-        {m.assigned_vehicle_ids.length > 0 && (
-          <VRow label="Vehicles" value={
-            <span style={{ display: "flex", gap: 5, flexWrap: "wrap" }}>
-              {m.assigned_vehicle_ids.map((id) => {
-                const v = vehicleMap.get(id);
-                return v ? (
-                  <button key={id} className="cp-chip neutral"
-                    style={{ fontFamily: "monospace", cursor: "pointer", background: "var(--cp-line-soft, #f1f3f7)", border: "1px solid var(--cp-line, #e7e9ee)" }}
-                    onClick={() => onVehicleClick(v)}>
-                    {id}
-                  </button>
-                ) : (
-                  <span key={id} className="cp-chip neutral" style={{ fontFamily: "monospace" }}>{id}</span>
-                );
-              })}
-            </span>
+        {m.assigned_vehicle_id && (
+          <VRow label="Assigned vehicle" value={
+            (() => {
+              const v = vehicleMap.get(m.assigned_vehicle_id!);
+              return v ? (
+                <button className="cp-chip neutral"
+                  style={{ fontFamily: "monospace", cursor: "pointer", background: "var(--cp-line-soft, #f1f3f7)", border: "1px solid var(--cp-line, #e7e9ee)" }}
+                  onClick={() => onVehicleClick(v)}>
+                  {m.assigned_vehicle_id}
+                </button>
+              ) : (
+                <span className="cp-chip neutral" style={{ fontFamily: "monospace" }}>{m.assigned_vehicle_id}</span>
+              );
+            })()
           } />
         )}
 
-        {m.assigned_warehouse_id && (
-          <VRow label="Warehouse" value={
-            <span className="cp-chip neutral" style={{ fontFamily: "monospace" }}>{m.assigned_warehouse_id}</span>
-          } />
-        )}
-        {m.notes && <VRow label="Notes" value={m.notes} />}
+        {m.special_requirement && <VRow label="Special req." value={m.special_requirement} />}
       </div>
+
+      <TasksTable tasks={m.tasks} />
+
+      {m.acceptance_status === "Pending" && (
+        <div style={{ display: "flex", gap: 8, marginTop: 12 }}>
+          <button
+            className="cp-btn cp-btn-sm"
+            style={{ background: "#22c55e", color: "#fff", border: "none", fontWeight: 600 }}
+            onClick={() => onAcceptanceChange(m.id, "Accepted")}
+          >
+            Accept mission
+          </button>
+          <button
+            className="cp-btn cp-btn-ghost cp-btn-sm"
+            style={{ color: "#dc2626", borderColor: "#dc2626" }}
+            onClick={() => onAcceptanceChange(m.id, "Rejected")}
+          >
+            Reject
+          </button>
+        </div>
+      )}
 
       <div style={{ fontSize: 11, color: "var(--cp-faint)", marginTop: 8 }}>{m.id}</div>
     </div>
@@ -151,6 +201,16 @@ export function MissionsSection({ carrierId, vehicles }: { carrierId: string; ve
       .catch((e) => setError(String(e)));
   }, [carrierId]);
 
+  function handleAcceptanceChange(missionId: string, status: "Accepted" | "Rejected") {
+    updateMissionAcceptance(carrierId, missionId, status)
+      .then((updated) => {
+        setMissions((prev) =>
+          prev ? prev.map((m) => (m.id === updated.id ? updated : m)) : prev
+        );
+      })
+      .catch((e) => setError(String(e)));
+  }
+
   const vehicleMap = new Map(vehicles.map((v) => [v.id, v]));
 
   if (error) return <p className="cp-alert">{error}</p>;
@@ -161,24 +221,34 @@ export function MissionsSection({ carrierId, vehicles }: { carrierId: string; ve
     </div>
   );
 
-  const byStatus = STATUS_ORDER.reduce<Record<string, Mission[]>>((acc, s) => {
-    const group = missions.filter((m) => m.status === s);
-    if (group.length) acc[s] = group;
-    return acc;
-  }, {});
+  // Group by status groups, keep ordering
+  const grouped: { label: string; missions: Mission[] }[] = [];
+  for (const group of STATUS_GROUPS) {
+    const items = missions.filter((m) => group.statuses.includes(m.status));
+    if (items.length) grouped.push({ label: group.label, missions: items });
+  }
+  // Any status not covered by groups
+  const knownStatuses = new Set(STATUS_GROUPS.flatMap((g) => g.statuses));
+  const other = missions.filter((m) => !knownStatuses.has(m.status));
+  if (other.length) grouped.push({ label: "Other", missions: other });
 
   return (
     <>
       <div className="cp-stack">
-        {Object.entries(byStatus).map(([status, group]) => (
-          <div key={status}>
+        {grouped.map(({ label, missions: group }) => (
+          <div key={label}>
             <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
-              <span style={{ width: 8, height: 8, borderRadius: "50%", background: STATUS_COLOR[status], display: "inline-block" }} />
-              <span style={{ fontWeight: 600, fontSize: 13, color: "var(--cp-ink, #0f172a)" }}>{status}</span>
+              <span style={{ fontWeight: 600, fontSize: 13, color: "var(--cp-ink, #0f172a)" }}>{label}</span>
               <span style={{ fontSize: 12, color: "var(--cp-faint)" }}>· {group.length}</span>
             </div>
             {group.map((m) => (
-              <MissionCard key={m.id} m={m} vehicleMap={vehicleMap} onVehicleClick={setActiveVehicle} />
+              <MissionCard
+                key={m.id}
+                m={m}
+                vehicleMap={vehicleMap}
+                onVehicleClick={setActiveVehicle}
+                onAcceptanceChange={handleAcceptanceChange}
+              />
             ))}
           </div>
         ))}
