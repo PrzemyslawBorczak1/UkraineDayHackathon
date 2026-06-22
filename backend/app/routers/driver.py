@@ -74,24 +74,25 @@ def _point(geom) -> Optional[dict]:
 
 
 def _task_payload(task: Task) -> dict:
-    """Task shaped for the driver app. Cargo/weight/volume/times come from the
-    parent mission until task-level metadata exists."""
+    """Task shaped for the driver app. Weight/volume/times come from the task's
+    own interval (allocated cargo + time window); origin/destination/cargo_type
+    from the parent mission."""
     m = task.mission
     special = [m.special_requirement] if m.special_requirement else []
     return {
         "id": task.id,
         "mission_id": m.id,
         "cargo_type": m.cargo_type,
-        "start_time": _iso_z(m.available_from),
-        "end_time": _iso_z(m.deadline),
+        "start_time": _iso_z(task.start_date or m.available_from),
+        "end_time": _iso_z(task.end_date or m.deadline),
         "origin": m.origin_point,
         "origin_address": m.origin_address,
         "origin_coordinates": _point(m.origin_geom),
         "destination": m.destination_point,
         "destination_address": m.dest_address,
         "destination_coordinates": _point(m.dest_geom),
-        "weight": m.weight_t,
-        "volume": m.volume_m3,
+        "weight": task.allocated_weight if task.allocated_weight is not None else m.weight_t,
+        "volume": task.allocated_volume if task.allocated_volume is not None else m.volume_m3,
         "special_requirements": special,
         "unloading_wait_minutes": None,  # task-level metadata, added later
         "is_current": m.status == MissionStatus.IN_PROGRESS,

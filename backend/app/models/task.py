@@ -1,7 +1,7 @@
 from datetime import datetime
 from typing import Optional, TYPE_CHECKING
 
-from sqlalchemy import Integer, String, DateTime, ForeignKey
+from sqlalchemy import Integer, String, Float, DateTime, ForeignKey
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.database import Base
@@ -28,8 +28,10 @@ class Task(Base):
     single vehicle. Missions are divisible — one mission can be split across
     several tasks/vehicles.
 
-    Links (task -> vehicle -> mission) plus a phase status and its time window.
-    Cargo metadata (cargo_type, volume_t, weight_t) will be added later.
+    Mirrors an allocation-engine *interval*: a vehicle's stage of executing a
+    mission. Holds the phase (`status`), its time window (`start_date`/
+    `end_date`), the mission reference, and the cargo taken in this interval
+    (`allocated_weight`/`allocated_volume`).
     """
     __tablename__ = "tasks"
 
@@ -43,6 +45,9 @@ class Task(Base):
     end_date: Mapped[Optional[datetime]] = mapped_column(
         DateTime(timezone=True), nullable=True
     )
+    # Cargo moved in this interval (engine MissionAssignment.allocated_*).
+    allocated_weight: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
+    allocated_volume: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
 
     # Relationships
     vehicle: Mapped["Vehicle"] = relationship()

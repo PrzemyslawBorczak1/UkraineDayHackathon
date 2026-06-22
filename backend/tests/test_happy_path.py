@@ -129,13 +129,15 @@ def _reduce(events: list[str]) -> str:
 
 def test_warehouse_summary_shape():
     w = Warehouse(
-        id="W001", name="Hub Wrocław", city="Wrocław", voivodeship="Dolnośląskie",
+        id="W001", carrier_id="C001", name="Hub Wrocław", city="Wrocław",
+        voivodeship="Dolnośląskie", geom=from_shape(Point(17.03, 51.1), srid=4326),
         warehouse_type="Cold storage", cold_storage=True,
         available_capacity_pct=40, availability_status="Available",
     )
     summary = warehouses._summary(w)
     assert summary == {
         "id": "W001",
+        "carrier_id": "C001",
         "name": "Hub Wrocław",
         "city": "Wrocław",
         "voivodeship": "Dolnośląskie",
@@ -143,7 +145,50 @@ def test_warehouse_summary_shape():
         "cold_storage": True,
         "available_capacity_pct": 40,
         "availability_status": "Available",
+        "lat": 51.1,
+        "lng": 17.03,
     }
+
+
+def test_engine_phase_mapping():
+    from app.engine_adapter import map_phase
+    from app.models.task import TaskStatus
+
+    assert map_phase("IN_PROGRESS_PASSIVE", False) == TaskStatus.TRAVELING
+    assert map_phase("PASSIVE_WAITING", False) == TaskStatus.WAIT
+    assert map_phase("ACTIVE_WAITING", False) == TaskStatus.PREPARE_UNLOAD
+    assert map_phase("IN_PROGRESS_ACTIVE", True) == TaskStatus.TRANSPORTING
+    assert map_phase("IN_PROGRESS_ACTIVE", False) == TaskStatus.UNLOAD
+
+
+def test_task_from_interval_maps_assignment():
+    from types import SimpleNamespace
+    from app.engine_adapter import task_from_interval
+    from app.models.task import TaskStatus
+
+    interval = SimpleNamespace(
+        start=datetime(2026, 6, 22, 8, 0),
+        end=datetime(2026, 6, 22, 12, 0),
+        status=SimpleNamespace(name="IN_PROGRESS_ACTIVE"),
+        is_delivery_trip=True,
+        mission_assignment=SimpleNamespace(
+            mission=SimpleNamespace(id="M0001"),
+            allocated_weight=12.5,
+            allocated_volume=20.0,
+        ),
+    )
+    task = task_from_interval("V0004", interval)
+    assert task.vehicle_id == "V0004"
+    assert task.mission_id == "M0001"
+    assert task.status == TaskStatus.TRANSPORTING
+    assert task.allocated_weight == 12.5
+    assert task.allocated_volume == 20.0
+
+    empty = SimpleNamespace(
+        start=None, end=None, status=SimpleNamespace(name="PASSIVE_WAITING"),
+        is_delivery_trip=False, mission_assignment=None,
+    )
+    assert task_from_interval("V0004", empty) is None
 
 
 def test_mission_happy_path_state_machine():
