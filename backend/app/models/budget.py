@@ -15,7 +15,7 @@ class Budget(Base):
     __tablename__ = "budget"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
-    period: Mapped[str] = mapped_column(String(20))  # Daily/Weekly/Monthly
+    period: Mapped[str] = mapped_column(String(50))  # Daily/Weekly/Monthly (~4.35 weeks)
     budget_ceiling: Mapped[float] = mapped_column(Float)
     estimated_mission_demand: Mapped[float] = mapped_column(Float)
     fundable_pct: Mapped[float] = mapped_column(Float)
