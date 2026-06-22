@@ -69,6 +69,13 @@ export function StatisticsPage() {
 
   const visibleVehicles = vehicles.filter((v) => isSelected(v.carrierId));
 
+  // A trip belongs to whichever carrier's vehicle drives it. Only trips
+  // driven by a visible carrier should be shown.
+  const visibleTripIds = useMemo(
+    () => new Set(visibleVehicles.map((v) => v.tripId)),
+    [visibleVehicles]
+  );
+
   return (
     <div
       style={{
@@ -114,9 +121,11 @@ export function StatisticsPage() {
             url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
           />
 
-          {/* Mission routes (dashed, neutral color) */}
+          {/* Mission routes (dashed, neutral color) — only for selected carriers */}
           {missions.map((mission) =>
-            mission.trips.map((trip) => (
+            mission.trips
+              .filter((trip) => visibleTripIds.has(trip.id))
+              .map((trip) => (
               <Polyline
                 key={trip.id}
                 positions={trip.polyline}
