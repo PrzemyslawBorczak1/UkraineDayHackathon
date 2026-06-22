@@ -1,6 +1,13 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
-import { MapContainer, Marker, Polyline, Popup, TileLayer } from "react-leaflet";
+import {
+  MapContainer,
+  Marker,
+  Polyline,
+  Popup,
+  TileLayer,
+  useMap,
+} from "react-leaflet";
 import L from "leaflet";
 import { TruckIcon } from "../components/TruckIcon";
 import { useStatisticsData } from "../hooks/useStatisticsData";
@@ -39,8 +46,22 @@ function makeTruckIcon(color: string): L.DivIcon {
   });
 }
 
+/** Tells Leaflet to recompute its size whenever `trigger` changes. */
+function MapResizer({ trigger }: { trigger: unknown }) {
+  const map = useMap();
+  useEffect(() => {
+    // Wait for the layout/transition to settle before recalculating.
+    const t = setTimeout(() => map.invalidateSize(), 250);
+    return () => clearTimeout(t);
+  }, [trigger, map]);
+  return null;
+}
+
 export function StatisticsPage() {
   const { missions, vehicles, loading, error } = useStatisticsData();
+
+  // When true, the map shrinks to the left and the filters move beside it.
+  const [compact, setCompact] = useState(false);
 
   // Carriers present in the data.
   const carrierIds = useMemo(
@@ -76,101 +97,10 @@ export function StatisticsPage() {
     [visibleVehicles]
   );
 
-  return (
-    <div
-      style={{
-        display: "flex",
-        flexDirection: "column",
-        height: "100vh",
-        width: "100vw",
-        fontFamily: "sans-serif",
-      }}
-    >
-      <div style={{ flex: 1, position: "relative", minHeight: 0, padding: 16 }}>
-        {(loading || error) && (
-          <div
-            style={{
-              position: "absolute",
-              top: 26,
-              left: "50%",
-              transform: "translateX(-50%)",
-              zIndex: 1000,
-              background: error ? "#fee2e2" : "#fff",
-              padding: "4px 10px",
-              borderRadius: 6,
-              boxShadow: "0 1px 4px rgba(0,0,0,0.2)",
-              fontSize: 12,
-            }}
-          >
-            {error ? `Error: ${error}` : "Loading map data…"}
-          </div>
-        )}
-
-        <MapContainer
-          center={DEFAULT_CENTER}
-          zoom={DEFAULT_ZOOM}
-          style={{
-            height: "100%",
-            width: "100%",
-            borderRadius: 8,
-            boxShadow: "0 1px 6px rgba(0,0,0,0.15)",
-          }}
-        >
-          <TileLayer
-            attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
-            url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-          />
-
-          {/* Mission routes (dashed, neutral color) — only for selected carriers */}
-          {missions.map((mission) =>
-            mission.trips
-              .filter((trip) => visibleTripIds.has(trip.id))
-              .map((trip) => (
-              <Polyline
-                key={trip.id}
-                positions={trip.polyline}
-                pathOptions={{
-                  color: MISSION_COLOR,
-                  weight: 2.5,
-                  opacity: 0.8,
-                  dashArray: "8 8",
-                }}
-              >
-                <Popup>
-                  Mission: {mission.id}
-                  <br />
-                  Trip: {trip.id}
-                </Popup>
-              </Polyline>
-            ))
-          )}
-
-          {/* Vehicles (colored by carrier, filtered) */}
-          {visibleVehicles.map((vehicle) => (
-            <Marker
-              key={vehicle.id}
-              position={[vehicle.lat, vehicle.lng]}
-              icon={makeTruckIcon(carrierColor(vehicle.carrierId))}
-            >
-              <Popup>
-                Vehicle: {vehicle.id}
-                <br />
-                Carrier: {vehicle.carrierId}
-                <br />
-                Trip: {vehicle.tripId}
-              </Popup>
-            </Marker>
-          ))}
-        </MapContainer>
-      </div>
-
-      {/* Carrier filter bar */}
+  const filters = (
+    <>
       <div
         style={{
-          flexShrink: 0,
-          padding: "12px 16px",
-          borderTop: "1px solid #e5e7eb",
-          background: "#f9fafb",
           display: "flex",
           alignItems: "center",
           gap: 10,
@@ -232,6 +162,146 @@ export function StatisticsPage() {
             </button>
           );
         })}
+      </div>
+    </>
+  );
+
+  return (
+    <div
+      style={{
+        display: "flex",
+        flexDirection: compact ? "row" : "column",
+        height: "100vh",
+        width: "100vw",
+        fontFamily: "sans-serif",
+      }}
+    >
+      {/* Map area */}
+      <div
+        style={{
+          position: "relative",
+          minHeight: 0,
+          minWidth: 0,
+          padding: 16,
+          height: compact ? "100%" : "auto",
+          width: compact ? "55%" : "auto",
+          flex: compact ? "0 0 55%" : 1,
+          transition: "width 0.25s ease, flex-basis 0.25s ease",
+        }}
+      >
+        {(loading || error) && (
+          <div
+            style={{
+              position: "absolute",
+              top: 26,
+              left: "50%",
+              transform: "translateX(-50%)",
+              zIndex: 1000,
+              background: error ? "#fee2e2" : "#fff",
+              padding: "4px 10px",
+              borderRadius: 6,
+              boxShadow: "0 1px 4px rgba(0,0,0,0.2)",
+              fontSize: 12,
+            }}
+          >
+            {error ? `Error: ${error}` : "Loading map data…"}
+          </div>
+        )}
+
+        <MapContainer
+          center={DEFAULT_CENTER}
+          zoom={DEFAULT_ZOOM}
+          style={{
+            height: "100%",
+            width: "100%",
+            borderRadius: 8,
+            boxShadow: "0 1px 6px rgba(0,0,0,0.15)",
+          }}
+        >
+          <MapResizer trigger={compact} />
+
+          <TileLayer
+            attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+            url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+          />
+
+          {/* Mission routes (dashed, neutral color) — only for selected carriers */}
+          {missions.map((mission) =>
+            mission.trips
+              .filter((trip) => visibleTripIds.has(trip.id))
+              .map((trip) => (
+                <Polyline
+                  key={trip.id}
+                  positions={trip.polyline}
+                  pathOptions={{
+                    color: MISSION_COLOR,
+                    weight: 2.5,
+                    opacity: 0.8,
+                    dashArray: "8 8",
+                  }}
+                >
+                  <Popup>
+                    Mission: {mission.id}
+                    <br />
+                    Trip: {trip.id}
+                  </Popup>
+                </Polyline>
+              ))
+          )}
+
+          {/* Vehicles (colored by carrier, filtered) */}
+          {visibleVehicles.map((vehicle) => (
+            <Marker
+              key={vehicle.id}
+              position={[vehicle.lat, vehicle.lng]}
+              icon={makeTruckIcon(carrierColor(vehicle.carrierId))}
+            >
+              <Popup>
+                Vehicle: {vehicle.id}
+                <br />
+                Carrier: {vehicle.carrierId}
+                <br />
+                Trip: {vehicle.tripId}
+              </Popup>
+            </Marker>
+          ))}
+        </MapContainer>
+      </div>
+
+      {/* Filters + size control. Bottom bar when full, side panel when compact. */}
+      <div
+        style={{
+          flex: 1,
+          flexShrink: 0,
+          minWidth: 0,
+          padding: "12px 16px",
+          background: "#f9fafb",
+          borderTop: compact ? "none" : "1px solid #e5e7eb",
+          borderLeft: compact ? "1px solid #e5e7eb" : "none",
+          display: "flex",
+          flexDirection: "column",
+          gap: 12,
+          overflowY: "auto",
+        }}
+      >
+        <button
+          type="button"
+          onClick={() => setCompact((c) => !c)}
+          style={{
+            alignSelf: "flex-start",
+            fontSize: 12,
+            padding: "5px 12px",
+            borderRadius: 6,
+            border: "1px solid #d1d5db",
+            background: "#fff",
+            color: "#374151",
+            cursor: "pointer",
+          }}
+        >
+          {compact ? "↔ Expand map" : "↤ Shrink map"}
+        </button>
+
+        {filters}
       </div>
     </div>
   );
