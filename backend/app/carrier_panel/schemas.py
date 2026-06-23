@@ -196,6 +196,11 @@ class TaskOut(BaseModel):
     id: int
     vehicle_id: str
     mission_id: str
+    status: str
+    start_date: Optional[datetime] = None
+    end_date: Optional[datetime] = None
+    allocated_weight: Optional[float] = None
+    allocated_volume: Optional[float] = None
 
 
 class MissionOut(BaseModel):
@@ -221,6 +226,11 @@ class MissionOut(BaseModel):
     assigned_vehicle_id: Optional[str] = None
     assigned_carrier_id: Optional[str] = None
     assignment_score: Optional[float] = None
+    # Coordinates extracted from PostGIS geometry
+    origin_lat: Optional[float] = None
+    origin_lng: Optional[float] = None
+    dest_lat: Optional[float] = None
+    dest_lng: Optional[float] = None
     # In-memory acceptance decision — not stored in DB
     acceptance_status: str = "Pending"
     tasks: list[TaskOut] = Field(default_factory=list)

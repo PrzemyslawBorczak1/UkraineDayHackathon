@@ -133,6 +133,11 @@ export type TaskSummary = {
   id: number;
   vehicle_id: string;
   mission_id: string;
+  status: string;
+  start_date: string | null;
+  end_date: string | null;
+  allocated_weight: number | null;
+  allocated_volume: number | null;
 };
 
 export type Mission = {
@@ -156,6 +161,10 @@ export type Mission = {
   assigned_vehicle_id: string | null;
   assigned_carrier_id: string | null;
   assignment_score: number | null;
+  origin_lat: number | null;
+  origin_lng: number | null;
+  dest_lat: number | null;
+  dest_lng: number | null;
   acceptance_status: string; // "Pending" | "Accepted" | "Rejected"
   tasks: TaskSummary[];
 };

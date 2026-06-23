@@ -59,16 +59,16 @@ function PropositionsPanel({
               className="w-full text-left rounded-xl ring-1 ring-black/5 px-4 py-3 hover:bg-neutral-50 transition-colors"
             >
               <div className="flex items-center justify-between gap-2">
-                <span className="text-sm font-semibold truncate">{v.proposition.proponowany_typ_ladunku}</span>
-                <Badge tone={priorityTone(v.proposition.priorytet)}>{v.proposition.priorytet}</Badge>
+                <span className="text-sm font-semibold truncate">{v.proposition.proposed_cargo_type}</span>
+                <Badge tone={priorityTone(v.proposition.priority)}>{v.proposition.priority}</Badge>
               </div>
               <div className="mt-1 text-[11px] text-neutral-600 truncate">
                 {v.originName} → {v.destName}
               </div>
               <div className="mt-1 text-[10px] text-neutral-400 tabular-nums">
-                {v.proposition.wymagany_typ_pojazdu} · {Math.round(v.proposition.szacowany_dystans_km)} km
+                {v.proposition.required_vehicle_type} · {Math.round(v.proposition.estimated_distance_km)} km
               </div>
-              <p className="mt-2 text-[11px] text-neutral-500 line-clamp-3">{v.proposition.uzasadnienie}</p>
+              <p className="mt-2 text-[11px] text-neutral-500 line-clamp-3">{v.proposition.justification}</p>
             </button>
           ))
         )}

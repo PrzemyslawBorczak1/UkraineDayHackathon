@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { getMissions, updateMissionAcceptance } from "./api";
 import { availabilityTone } from "./labels";
 import { Modal } from "./Modal";
+import { MissionRouteMap } from "./MissionRouteMap";
 import type { Mission, TaskSummary, Vehicle } from "./types";
 
 // Raw DB statuses → color
@@ -66,24 +67,121 @@ function VehicleModal({ vehicle, onClose }: { vehicle: Vehicle; onClose: () => v
   );
 }
 
-function TasksTable({ tasks }: { tasks: TaskSummary[] }) {
+const TASK_STATUS_META: Record<string, { color: string; bg: string; dot: string }> = {
+  Traveling:     { color: "#1d4ed8", bg: "#eff6ff", dot: "#3b82f6" },
+  Transporting:  { color: "#065f46", bg: "#ecfdf5", dot: "#10b981" },
+  PrepareUnload: { color: "#92400e", bg: "#fffbeb", dot: "#f59e0b" },
+  Unload:        { color: "#7c2d12", bg: "#fff7ed", dot: "#f97316" },
+  Wait:          { color: "#475569", bg: "#f8fafc", dot: "#94a3b8" },
+};
+
+function fmtDate(iso: string | null): string {
+  if (!iso) return "—";
+  const d = new Date(iso);
+  return d.toLocaleDateString("en-GB", { day: "2-digit", month: "short" }) +
+    " " + d.toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" });
+}
+
+function duration(start: string | null, end: string | null): string {
+  if (!start || !end) return "";
+  const h = Math.round((new Date(end).getTime() - new Date(start).getTime()) / 3_600_000);
+  if (h < 24) return `${h}h`;
+  return `${Math.floor(h / 24)}d ${h % 24}h`;
+}
+
+function TasksTable({ tasks, vehicleMap, onVehicleClick }: {
+  tasks: TaskSummary[];
+  vehicleMap: Map<string, Vehicle>;
+  onVehicleClick: (v: Vehicle) => void;
+}) {
   if (tasks.length === 0) return null;
   return (
-    <div style={{ marginTop: 10, borderTop: "1px solid var(--cp-line, #e7e9ee)", paddingTop: 8 }}>
-      <div style={{ fontSize: 11, fontWeight: 700, color: "var(--cp-faint)", textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 6 }}>
-        Tasks ({tasks.length})
+    <div style={{ marginTop: 12, borderTop: "1px solid var(--cp-line, #e7e9ee)", paddingTop: 10 }}>
+      <div style={{ fontSize: 11, fontWeight: 700, color: "var(--cp-faint)", textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 8 }}>
+        Vehicle tasks · {tasks.length}
       </div>
-      <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-        {tasks.map((t) => (
-          <div key={t.id} style={{
-            display: "flex", alignItems: "center", gap: 8,
-            background: "var(--cp-line-soft, #f8fafc)", borderRadius: 4, padding: "4px 8px",
-            fontSize: 12,
-          }}>
-            <span style={{ color: "var(--cp-faint)", minWidth: 32 }}>#{t.id}</span>
-            <span className="cp-chip neutral" style={{ fontFamily: "monospace" }}>{t.vehicle_id}</span>
-          </div>
-        ))}
+      <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+        {tasks.map((t) => {
+          const meta = TASK_STATUS_META[t.status] ?? TASK_STATUS_META["Wait"];
+          const vehicle = vehicleMap.get(t.vehicle_id);
+          const dur = duration(t.start_date, t.end_date);
+          return (
+            <div key={t.id} style={{
+              display: "grid",
+              gridTemplateColumns: "8px 1fr",
+              gap: "0 10px",
+              background: meta.bg,
+              borderRadius: 6,
+              overflow: "hidden",
+              border: "1px solid var(--cp-line, #e7e9ee)",
+            }}>
+              <div style={{ background: meta.dot, borderRadius: "6px 0 0 6px" }} />
+              <div style={{ padding: "8px 10px 8px 0" }}>
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, marginBottom: 5 }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                    <button
+                      style={{
+                        fontFamily: "monospace", fontSize: 12, fontWeight: 700,
+                        color: meta.color, background: "none", border: "none",
+                        cursor: vehicle ? "pointer" : "default", padding: 0,
+                        textDecoration: vehicle ? "underline dotted" : "none",
+                      }}
+                      onClick={() => vehicle && onVehicleClick(vehicle)}
+                      title={vehicle ? "Click for vehicle details" : undefined}
+                    >
+                      {t.vehicle_id}
+                    </button>
+                    {vehicle && (
+                      <span style={{ fontSize: 11, color: "var(--cp-faint)" }}>
+                        {vehicle.vehicle_type}
+                      </span>
+                    )}
+                  </div>
+                  <span style={{
+                    fontSize: 11, fontWeight: 600, padding: "1px 7px", borderRadius: 99,
+                    background: meta.bg, color: meta.color,
+                    border: `1px solid ${meta.dot}33`,
+                  }}>
+                    {t.status}
+                  </span>
+                </div>
+
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "3px 12px", fontSize: 12 }}>
+                  <div style={{ color: "var(--cp-faint)", display: "flex", gap: 4, alignItems: "center" }}>
+                    <span style={{ opacity: 0.5 }}>↦</span>
+                    <span>{fmtDate(t.start_date)}</span>
+                  </div>
+                  <div style={{ color: "var(--cp-faint)", display: "flex", gap: 4, alignItems: "center" }}>
+                    <span style={{ opacity: 0.5 }}>↤</span>
+                    <span>{fmtDate(t.end_date)}</span>
+                  </div>
+                  {(t.allocated_weight != null || t.allocated_volume != null) && (
+                    <>
+                      {t.allocated_weight != null && (
+                        <div style={{ fontSize: 12, color: "var(--cp-ink, #0f172a)" }}>
+                          <span style={{ color: "var(--cp-faint)" }}>Weight </span>
+                          <strong>{t.allocated_weight.toFixed(1)} t</strong>
+                        </div>
+                      )}
+                      {t.allocated_volume != null && (
+                        <div style={{ fontSize: 12, color: "var(--cp-ink, #0f172a)" }}>
+                          <span style={{ color: "var(--cp-faint)" }}>Volume </span>
+                          <strong>{t.allocated_volume.toFixed(1)} m³</strong>
+                        </div>
+                      )}
+                    </>
+                  )}
+                </div>
+
+                {dur && (
+                  <div style={{ marginTop: 4, fontSize: 11, color: meta.color, fontWeight: 600 }}>
+                    ⏱ {dur}
+                  </div>
+                )}
+              </div>
+            </div>
+          );
+        })}
       </div>
     </div>
   );
@@ -94,7 +192,8 @@ function MissionCard({ m, vehicleMap, onVehicleClick, onAcceptanceChange }: {
   vehicleMap: Map<string, Vehicle>;
   onVehicleClick: (v: Vehicle) => void;
   onAcceptanceChange: (missionId: string, status: "Accepted" | "Rejected") => void;
-}) {
+}
+) {
   const accentColor = STATUS_COLOR[m.status] ?? "#94a3b8";
   const acceptStyle = ACCEPTANCE_STYLE[m.acceptance_status] ?? ACCEPTANCE_STYLE["Pending"];
 
@@ -157,7 +256,8 @@ function MissionCard({ m, vehicleMap, onVehicleClick, onAcceptanceChange }: {
         {m.special_requirement && <VRow label="Special req." value={m.special_requirement} />}
       </div>
 
-      <TasksTable tasks={m.tasks} />
+      <TasksTable tasks={m.tasks} vehicleMap={vehicleMap} onVehicleClick={onVehicleClick} />
+      <MissionRouteMap mission={m} />
 
       {m.acceptance_status === "Pending" && (
         <div style={{ display: "flex", gap: 8, marginTop: 12 }}>

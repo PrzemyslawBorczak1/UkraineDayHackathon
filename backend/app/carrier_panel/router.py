@@ -5,7 +5,7 @@ from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 from shapely.geometry import Point
-from geoalchemy2.shape import from_shape
+from geoalchemy2.shape import from_shape, to_shape
 from sqlalchemy.orm import Session, selectinload
 
 from app.database import get_db
@@ -54,6 +54,13 @@ def _mission_out(m: Mission, tasks: list[Task]) -> MissionOut:
     out = MissionOut.model_validate(m)
     out.acceptance_status = acceptance
     out.tasks = [TaskOut.model_validate(t) for t in tasks]
+    try:
+        o = to_shape(m.origin_geom)
+        out.origin_lat, out.origin_lng = o.y, o.x
+        d = to_shape(m.dest_geom)
+        out.dest_lat, out.dest_lng = d.y, d.x
+    except Exception:
+        pass
     return out
 
 

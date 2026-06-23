@@ -65,13 +65,13 @@ async def recommend_missions(db: Session = Depends(get_db)):
         raise HTTPException(status_code=400, detail="No warehouses or demand points available")
 
     payload = {
-        "magazyny": [_warehouse_payload(w) for w in warehouses],
-        "punkty_odbioru": [_crisis_payload(o) for o in demand],
+        "warehouses": [_warehouse_payload(w) for w in warehouses],
+        "map_objects": [_crisis_payload(o) for o in demand],
     }
 
     try:
         async with httpx.AsyncClient(timeout=120.0) as client:
-            resp = await client.post(f"{RECOMMENDATIONS_URL}/rekomenduj-misje", json=payload)
+            resp = await client.post(f"{RECOMMENDATIONS_URL}/recommend-missions", json=payload)
     except httpx.RequestError as exc:
         raise HTTPException(status_code=502, detail=f"Recommendations service unreachable: {exc}")
 

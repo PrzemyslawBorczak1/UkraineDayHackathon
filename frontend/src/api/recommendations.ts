@@ -7,6 +7,6 @@ import { api } from "../lib/api";
 
 /** POST /api/v1/recommendations → list of proposed missions. */
 export async function getRecommendations(): Promise<MissionProposition[]> {
-  const res = await api.post<{ misje: MissionProposition[] }>("/recommendations", {});
-  return res.misje ?? [];
+  const res = await api.post<{ missions: MissionProposition[] }>("/recommendations", {});
+  return res.missions ?? [];
 }
