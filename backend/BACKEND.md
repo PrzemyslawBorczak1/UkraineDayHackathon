@@ -93,7 +93,8 @@ Flow kierowcy — pełny kontrakt w [`../API_SCHEME.md`](../API_SCHEME.md) (MVP,
 - `PATCH /api/v1/tasks/{taskId}` - zakończenie taska → `driver_delivered`
 
 Koordynator:
-- `POST /api/v1/missions` - tworzenie misji (status NEW, auto-id; parsuje temp/ADR/liftgate z noty)
+- `POST /api/v1/missions` - tworzenie misji (status NEW, auto-id; origin z `origin_warehouse_id`
+  — point/geom/address z magazynu; parsuje temp/ADR/liftgate z noty)
 - `GET /warehouse/` - lista magazynów (pola summary/filtrowania)
 - `GET /warehouse/{warehouseId}/` - pełny model magazynu
 - `GET /crisis/` - lista obiektów crisis-map (summary + lat/lng)

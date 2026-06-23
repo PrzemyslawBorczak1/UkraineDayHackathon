@@ -9,11 +9,11 @@ from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 from shapely.geometry import Point
-from geoalchemy2.shape import from_shape
+from geoalchemy2.shape import from_shape, to_shape
 from sqlalchemy.orm import Session
 
 from app.database import get_db
-from app.models import Mission
+from app.models import Mission, Warehouse
 from app.models.mission import MissionStatus
 from app.load import parse_requirements
 from app.serialize import serialize
@@ -24,10 +24,7 @@ router = APIRouter(prefix="/api/v1", tags=["missions"])
 class MissionCreate(BaseModel):
     id: Optional[str] = None  # auto-generated (M0001 style) when omitted
     cargo_type: str
-    origin_point: str
-    origin_lat: float
-    origin_lng: float
-    origin_address: Optional[str] = None
+    origin_warehouse_id: str  # origin = this warehouse (point/geom/address derived)
     destination_point: str
     dest_lat: float
     dest_lng: float
@@ -58,14 +55,22 @@ def create_mission(body: MissionCreate, db: Session = Depends(get_db)):
     if db.query(Mission).filter(Mission.id == mission_id).first() is not None:
         raise HTTPException(status_code=409, detail=f"Mission {mission_id} already exists")
 
+    warehouse = db.query(Warehouse).filter(Warehouse.id == body.origin_warehouse_id).first()
+    if warehouse is None:
+        raise HTTPException(
+            status_code=404, detail=f"Warehouse {body.origin_warehouse_id} does not exist"
+        )
+
     temp_range, certificate_adr, liftgate = parse_requirements(body.special_requirement)
 
+    origin_pt = to_shape(warehouse.geom)
     mission = Mission(
         id=mission_id,
         cargo_type=body.cargo_type,
-        origin_point=body.origin_point,
-        origin_geom=from_shape(Point(body.origin_lng, body.origin_lat), srid=4326),
-        origin_address=body.origin_address,
+        origin_point=warehouse.city,
+        origin_geom=from_shape(Point(origin_pt.x, origin_pt.y), srid=4326),
+        origin_address=warehouse.name,
+        origin_warehouse_id=warehouse.id,
         destination_point=body.destination_point,
         dest_geom=from_shape(Point(body.dest_lng, body.dest_lat), srid=4326),
         dest_address=body.dest_address,
