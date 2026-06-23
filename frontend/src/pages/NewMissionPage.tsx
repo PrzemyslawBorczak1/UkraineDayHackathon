@@ -4,6 +4,7 @@ import L from "leaflet";
 import { SectionLabel, CtaPill, cx } from "../components/ui";
 import { CARGO_TYPES, VEHICLE_TYPES, PRIORITIES } from "../data/dispatch";
 import { useCreateMission, type MissionCreatePayload } from "../hooks/useCreateMission";
+import { useWarehouses } from "../hooks/useWarehouses";
 import { toInputValue } from "../lib/time";
 
 // ── Geoapify autocomplete ─────────────────────────────────────────────────
@@ -196,9 +197,7 @@ function DateTimeInput(props: React.InputHTMLAttributes<HTMLInputElement>) {
 
 type FormState = {
   cargo_type: string;
-  origin_point: string;
-  origin_lat: string;
-  origin_lng: string;
+  origin_warehouse_id: string;
   destination_point: string;
   dest_lat: string;
   dest_lng: string;
@@ -216,9 +215,7 @@ type FormState = {
 
 const EMPTY: FormState = {
   cargo_type: "Medical supplies",
-  origin_point: "Kraków Hub 1",
-  origin_lat: "50.0647",
-  origin_lng: "19.9450",
+  origin_warehouse_id: "",
   destination_point: "Lviv Hub 1",
   dest_lat: "49.8397",
   dest_lng: "24.0297",
@@ -239,9 +236,7 @@ type Errors = Partial<Record<keyof FormState, string>>;
 function validate(f: FormState): Errors {
   const errors: Errors = {};
   if (!f.cargo_type) errors.cargo_type = "Required";
-  if (!f.origin_point.trim()) errors.origin_point = "Required";
-  else if (f.origin_lat === "" || isNaN(Number(f.origin_lat)) || f.origin_lng === "" || isNaN(Number(f.origin_lng)))
-    errors.origin_point = "Select a location from the dropdown";
+  if (!f.origin_warehouse_id) errors.origin_warehouse_id = "Select an origin warehouse";
   if (!f.destination_point.trim()) errors.destination_point = "Required";
   else if (f.dest_lat === "" || isNaN(Number(f.dest_lat)) || f.dest_lng === "" || isNaN(Number(f.dest_lng)))
     errors.destination_point = "Select a location from the dropdown";
@@ -263,6 +258,8 @@ export function NewMissionPage({ onBack }: { onBack: () => void }) {
   const [form, setForm] = useState<FormState>(EMPTY);
   const [errors, setErrors] = useState<Errors>({});
   const { state, create, reset } = useCreateMission();
+  const { data: warehouses } = useWarehouses();
+  const originWh = warehouses.find((w) => w.id === form.origin_warehouse_id);
 
   const set = (key: keyof FormState) => (
     e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>
@@ -279,9 +276,7 @@ export function NewMissionPage({ onBack }: { onBack: () => void }) {
 
     const payload: MissionCreatePayload = {
       cargo_type: form.cargo_type,
-      origin_point: form.origin_point,
-      origin_lat: Number(form.origin_lat),
-      origin_lng: Number(form.origin_lng),
+      origin_warehouse_id: form.origin_warehouse_id,
       destination_point: form.destination_point,
       dest_lat: Number(form.dest_lat),
       dest_lng: Number(form.dest_lng),
@@ -362,13 +357,19 @@ export function NewMissionPage({ onBack }: { onBack: () => void }) {
           <section className="space-y-5">
             <SectionLabel>Route</SectionLabel>
             <div className="grid grid-cols-2 gap-4">
-              <Field label="Origin location" error={errors.origin_point}>
-                <LocationInput
-                  value={form.origin_point}
-                  onChange={(v) => setForm((p) => ({ ...p, origin_point: v }))}
-                  onResolve={(lat, lon) => setForm((p) => ({ ...p, origin_lat: String(lat), origin_lng: String(lon) }))}
-                  placeholder="e.g. Kraków Hub 1"
-                />
+              <Field label="Origin warehouse" error={errors.origin_warehouse_id}>
+                <select
+                  value={form.origin_warehouse_id}
+                  onChange={set("origin_warehouse_id")}
+                  className={inputCls}
+                >
+                  <option value="">Select warehouse…</option>
+                  {warehouses.map((w) => (
+                    <option key={w.id} value={w.id}>
+                      {w.name} — {w.city}
+                    </option>
+                  ))}
+                </select>
               </Field>
               <Field label="Route distance (km)" error={errors.route_distance_km}>
                 <NumberInput placeholder="e.g. 450" value={form.route_distance_km} onChange={set("route_distance_km")} />
@@ -383,8 +384,8 @@ export function NewMissionPage({ onBack }: { onBack: () => void }) {
               </Field>
             </div>
             <RouteMap
-              originLat={form.origin_lat}
-              originLng={form.origin_lng}
+              originLat={originWh ? String(originWh.lat) : ""}
+              originLng={originWh ? String(originWh.lng) : ""}
               destLat={form.dest_lat}
               destLng={form.dest_lng}
             />

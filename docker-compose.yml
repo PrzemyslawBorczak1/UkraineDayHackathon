@@ -43,12 +43,25 @@ services:
     environment:
       - PYTHONUNBUFFERED=1
       - DATABASE_URL=postgresql+psycopg://crisis:crisis@db:5432/crisis
+      - RECOMMENDATIONS_URL=http://recommendations:8001
     depends_on:
       db:
         condition: service_healthy
       loader:
         condition: service_completed_successfully
     command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+
+  recommendations:
+    build: ./recomendations
+    container_name: recommendations
+    ports:
+      - "8001:8001"
+    volumes:
+      - ./recomendations:/app
+    environment:
+      - PYTHONUNBUFFERED=1
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+    command: uvicorn main:app --host 0.0.0.0 --port 8001 --reload
 
   frontend:
     build: ./frontend
