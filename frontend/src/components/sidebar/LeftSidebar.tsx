@@ -266,6 +266,9 @@ type LeftSidebarProps = {
   filteredCrisis: CrisisSummary[];
   selectedCrisisId: string | null;
   onSelectCrisis: (id: string) => void;
+
+  // Propositions view (list lives in the right rail)
+  propositionsCount: number;
 };
 
 /** Left rail: brand, navigation, search and the per-view filters + results. */
@@ -298,9 +301,11 @@ export function LeftSidebar({
   filteredCrisis,
   selectedCrisisId,
   onSelectCrisis,
+  propositionsCount,
 }: LeftSidebarProps) {
   const isWarehouses = activeNav === "warehouses";
   const isCrisis = activeNav === "crisis";
+  const isPropositions = activeNav === "propositions";
 
   return (
     <div className="flex flex-col h-full">
@@ -330,6 +335,8 @@ export function LeftSidebar({
                 ? missions.length || n.count
                 : n.id === "crisis"
                 ? crisis.length || n.count
+                : n.id === "propositions"
+                ? propositionsCount || undefined
                 : n.count
             }
             onClick={() => onNavChange(n.id)}
@@ -339,6 +346,17 @@ export function LeftSidebar({
         ))}
       </nav>
 
+      {isPropositions ? (
+        <div className="flex-1 px-6 pt-8 text-center text-[12px] text-neutral-500">
+          <p className="font-medium text-neutral-700">AI mission propositions</p>
+          <p className="mt-2 leading-relaxed">
+            Suggested missions are shown in the right panel. Click one to open the New Mission form
+            prefilled with its data.
+          </p>
+          <p className="mt-3 text-neutral-400">Right panel →</p>
+        </div>
+      ) : (
+      <>
       {/* Search */}
       <div className="px-4 pt-4">
         <Input
@@ -420,6 +438,8 @@ export function LeftSidebar({
           ))
         )}
       </div>
+      </>
+      )}
     </div>
   );
 }

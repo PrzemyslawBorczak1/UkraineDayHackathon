@@ -6,6 +6,7 @@ import { CARGO_TYPES, VEHICLE_TYPES, PRIORITIES } from "../data/dispatch";
 import { useCreateMission, type MissionCreatePayload } from "../hooks/useCreateMission";
 import { useWarehouses } from "../hooks/useWarehouses";
 import { toInputValue } from "../lib/time";
+import type { MissionPrefill } from "../types";
 
 // ── Geoapify autocomplete ─────────────────────────────────────────────────
 
@@ -254,8 +255,8 @@ function validate(f: FormState): Errors {
 
 // ── Page ──────────────────────────────────────────────────────────────────
 
-export function NewMissionPage({ onBack }: { onBack: () => void }) {
-  const [form, setForm] = useState<FormState>(EMPTY);
+export function NewMissionPage({ onBack, initial }: { onBack: () => void; initial?: MissionPrefill }) {
+  const [form, setForm] = useState<FormState>(() => ({ ...EMPTY, ...initial }));
   const [errors, setErrors] = useState<Errors>({});
   const { state, create, reset } = useCreateMission();
   const { data: warehouses } = useWarehouses();

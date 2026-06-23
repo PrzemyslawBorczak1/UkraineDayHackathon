@@ -1,9 +1,81 @@
 import { memo, type ReactNode } from "react";
-import { Badge, SectionLabel, TruckGlyph, cx } from "../ui";
+import { Badge, CtaPill, SectionLabel, TruckGlyph, cx } from "../ui";
 import type { BadgeTone } from "../ui";
-import type { MissionAnimation } from "../../types";
+import type { MissionAnimation, MissionProposition, MissionPropositionView } from "../../types";
 import { useWarehouseDetail } from "../../hooks/useWarehouseDetail";
 import { formatStamp } from "../../lib/time";
+
+/** Priority string → badge tone. */
+function priorityTone(priority: string): BadgeTone {
+  const p = priority.toLowerCase();
+  if (p.includes("critical")) return "rose";
+  if (p.includes("high")) return "amber";
+  if (p.includes("medium")) return "sky";
+  return "neutral";
+}
+
+/** Right rail: AI-recommended missions; clicking one opens the create form prefilled. */
+function PropositionsPanel({
+  views,
+  loading,
+  error,
+  onRefresh,
+  onSelect,
+}: {
+  views: MissionPropositionView[];
+  loading: boolean;
+  error: string | null;
+  onRefresh: () => void;
+  onSelect: (p: MissionProposition) => void;
+}) {
+  return (
+    <div className="flex flex-col h-full overflow-y-auto">
+      <div className="px-6 pt-6 flex items-center justify-between">
+        <div>
+          <SectionLabel>AI suggestions</SectionLabel>
+          <h2 className="mt-1 text-lg font-semibold tracking-tight">Mission propositions</h2>
+        </div>
+        <CtaPill variant="ghost" onClick={onRefresh} className={loading ? "opacity-50 pointer-events-none" : ""}>
+          {loading ? "Generating…" : "Refresh"}
+        </CtaPill>
+      </div>
+
+      <p className="px-6 mt-2 text-[11px] text-neutral-500">
+        Click a proposition to open the New Mission form prefilled with its data.
+      </p>
+
+      <div className="flex-1 px-4 mt-4 pb-6 space-y-2">
+        {loading ? (
+          <p className="px-2 py-3 text-[11px] text-neutral-400">Asking the planner for suggestions…</p>
+        ) : error ? (
+          <p className="px-2 py-3 text-[11px] text-rose-500">{error}</p>
+        ) : views.length === 0 ? (
+          <p className="px-2 py-3 text-[11px] text-neutral-400">No propositions yet. Hit Refresh.</p>
+        ) : (
+          views.map((v, i) => (
+            <button
+              key={`${v.proposition.origin_id}-${v.proposition.destination_id}-${i}`}
+              onClick={() => onSelect(v.proposition)}
+              className="w-full text-left rounded-xl ring-1 ring-black/5 px-4 py-3 hover:bg-neutral-50 transition-colors"
+            >
+              <div className="flex items-center justify-between gap-2">
+                <span className="text-sm font-semibold truncate">{v.proposition.proponowany_typ_ladunku}</span>
+                <Badge tone={priorityTone(v.proposition.priorytet)}>{v.proposition.priorytet}</Badge>
+              </div>
+              <div className="mt-1 text-[11px] text-neutral-600 truncate">
+                {v.originName} → {v.destName}
+              </div>
+              <div className="mt-1 text-[10px] text-neutral-400 tabular-nums">
+                {v.proposition.wymagany_typ_pojazdu} · {Math.round(v.proposition.szacowany_dystans_km)} km
+              </div>
+              <p className="mt-2 text-[11px] text-neutral-500 line-clamp-3">{v.proposition.uzasadnienie}</p>
+            </button>
+          ))
+        )}
+      </div>
+    </div>
+  );
+}
 
 /** Origin/destination row with a colored leading dot. */
 const RoutePoint = memo(function RoutePoint({
@@ -222,6 +294,11 @@ export function RightSidebar({
   missionProgress = 0,
   missionCursor,
   missionColor = "#6366f1",
+  propositions,
+  propositionsLoading = false,
+  propositionsError = null,
+  onRefreshPropositions,
+  onSelectProposition,
 }: {
   warehouseId?: string | null;
   carrierColor?: string;
@@ -229,7 +306,23 @@ export function RightSidebar({
   missionProgress?: number;
   missionCursor?: Date;
   missionColor?: string;
+  propositions?: MissionPropositionView[] | null;
+  propositionsLoading?: boolean;
+  propositionsError?: string | null;
+  onRefreshPropositions?: () => void;
+  onSelectProposition?: (p: MissionProposition) => void;
 }) {
+  if (propositions && onRefreshPropositions && onSelectProposition) {
+    return (
+      <PropositionsPanel
+        views={propositions}
+        loading={propositionsLoading}
+        error={propositionsError}
+        onRefresh={onRefreshPropositions}
+        onSelect={onSelectProposition}
+      />
+    );
+  }
   if (warehouseId) {
     return <WarehouseDetailPanel id={warehouseId} carrierColor={carrierColor} />;
   }

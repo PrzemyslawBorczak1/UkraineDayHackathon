@@ -10,6 +10,7 @@ export const NAV_ENTRIES: NavEntry[] = [
   { id: "tasks", label: "Missions", count: 240 },
   { id: "warehouses", label: "Warehouses", count: 36 },
   { id: "crisis", label: "Crisis", count: 55 },
+  { id: "propositions", label: "Mission propositions", count: 0 },
 ];
 
 export const STATUS_FILTERS = ["queued", "transit", "delivered", "delayed"] as const;
