@@ -151,7 +151,12 @@ def _build_missions(db: Session, window_start: datetime, window_end: datetime) -
     missions = []
     for m in rows:
         af, dl = _naive(m.available_from), _naive(m.deadline)
-        if af is None or dl is None or af >= window_end or dl < window_start:
+        if af is None or dl is None:
+            continue
+        # Keep only missions whose [available_from, deadline] OVERLAPS the window
+        # [window_start, window_end): drop those ending before it (dl < start) or
+        # starting after it (af >= end).
+        if dl < window_start or af >= window_end:
             continue
         temp = None
         if m.required_temperature:
@@ -189,10 +194,11 @@ def run_allocation(
 ) -> dict:
     """Run allocation and persist the schedule as Tasks.
 
-    `day` defaults to the earliest available_from among allocatable missions.
-    `days` is the window length; **None = span ALL missions** (earliest
-    available_from → latest deadline). More `iterations` / a wider window =
-    better (and slower) schedule. Returns a summary dict.
+    `day` defaults to **today (now)** — only missions relevant in
+    `[now, now + days]` are fed to the engine (historical/expired ones are
+    dropped). `days` is the window length; **None = from now to the latest
+    deadline**. More `iterations` / a wider window = better (and slower)
+    schedule. Returns a summary dict.
     """
     bounds = (
         db.query(func.min(Mission.available_from), func.max(Mission.deadline))
@@ -205,12 +211,15 @@ def run_allocation(
                 "tasks_created": 0, "missions_considered": 0,
                 "missions_assigned": 0, "vehicles_used": 0}
 
+    # Default window starts at *now* (CEST naive frame, matching mission times):
+    # we only schedule missions relevant in [now, now + days], not historical ones.
+    now = _naive(datetime.now(timezone.utc))
     if day is None:
-        day = _naive(earliest).date()
+        day = now.date()
     window_start = datetime.combine(day, time(0, 0))
     if days is None:
-        # Full span: cover every mission up to the latest deadline.
-        window_end = _naive(latest) + timedelta(days=1)
+        # Full span from the window start to the latest deadline.
+        window_end = max(_naive(latest), window_start) + timedelta(days=1)
     else:
         window_end = window_start + timedelta(days=max(1, days))
 
