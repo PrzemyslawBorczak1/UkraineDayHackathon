@@ -1,16 +1,9 @@
 import { memo, type ReactNode } from "react";
 import { Badge, SectionLabel, TruckGlyph, cx } from "../ui";
 import type { BadgeTone } from "../ui";
-import type { MissionDetail, VehicleAssignment, VehicleState } from "../../types";
+import type { MissionAnimation } from "../../types";
 import { useWarehouseDetail } from "../../hooks/useWarehouseDetail";
-
-/** Maps a vehicle state to a badge tone. */
-const STATE_TONE: Record<VehicleState, BadgeTone> = {
-  queued: "neutral",
-  transit: "emerald",
-  delivered: "sky",
-  maintenance: "rose",
-};
+import { formatStamp } from "../../lib/time";
 
 /** Origin/destination row with a colored leading dot. */
 const RoutePoint = memo(function RoutePoint({
@@ -38,23 +31,7 @@ const RoutePoint = memo(function RoutePoint({
   );
 });
 
-/** One assigned-vehicle card. */
-const VehicleRow = memo(function VehicleRow({ id, kind, state }: VehicleAssignment) {
-  return (
-    <div className="flex items-center gap-3 rounded-xl ring-1 ring-black/5 px-4 py-3">
-      <div className="size-9 rounded-lg bg-neutral-100 flex items-center justify-center text-neutral-400">
-        <TruckGlyph />
-      </div>
-      <div className="flex-1">
-        <div className="text-sm font-semibold tabular-nums">{id}</div>
-        <div className="text-[11px] text-neutral-500">{kind}</div>
-      </div>
-      <Badge tone={STATE_TONE[state]}>{state}</Badge>
-    </div>
-  );
-});
-
-/** A label/value stat row inside the warehouse detail view. */
+/** A label/value stat row. */
 const Stat = memo(function Stat({ label, value }: { label: string; value: ReactNode }) {
   return (
     <div className="rounded-xl bg-neutral-50 ring-1 ring-black/5 px-4 py-3">
@@ -64,14 +41,107 @@ const Stat = memo(function Stat({ label, value }: { label: string; value: ReactN
   );
 });
 
-/** Availability status → badge tone. */
-function availabilityTone(status: string): BadgeTone {
+/** Availability/status → badge tone. */
+function statusTone(status: string): BadgeTone {
   const s = status.toLowerCase();
-  if (s.includes("available") || s.includes("active")) return "emerald";
-  if (s.includes("limited") || s.includes("partial")) return "amber";
-  if (s.includes("full") || s.includes("unavailable") || s.includes("closed")) return "rose";
+  if (s.includes("transit") || s.includes("available") || s.includes("active")) return "emerald";
+  if (s.includes("scheduled") || s.includes("limited") || s.includes("partial")) return "amber";
+  if (s.includes("full") || s.includes("delayed") || s.includes("unavailable") || s.includes("closed"))
+    return "rose";
   return "neutral";
 }
+
+// ── Mission panel ────────────────────────────────────────────────────────────
+
+/** Right rail: selected mission, with the live playback position. */
+function MissionPanel({
+  mission,
+  progress,
+  cursor,
+  color,
+}: {
+  mission: MissionAnimation;
+  progress: number;
+  cursor: Date;
+  color: string;
+}) {
+  const start = new Date(mission.start);
+  const end = new Date(mission.end);
+  const pct = Math.round(progress * 100);
+
+  return (
+    <div className="flex flex-col h-full overflow-y-auto">
+      {/* Header */}
+      <div className="px-6 pt-6">
+        <div className="flex items-center justify-between">
+          <SectionLabel>Mission · {mission.id}</SectionLabel>
+          <Badge tone={statusTone(mission.status)}>{mission.status}</Badge>
+        </div>
+        <h2 className="mt-3 text-2xl font-semibold tracking-tight">{mission.cargo_type}</h2>
+        <p className="mt-1 text-[11px] text-neutral-500 tabular-nums">
+          {mission.origin_point} → {mission.destination_point} · {mission.priority}
+        </p>
+      </div>
+
+      {/* Playback window */}
+      <div className="mx-6 mt-5 rounded-xl bg-neutral-50 ring-1 ring-black/5 px-4 py-3">
+        <div className="flex items-center justify-between">
+          <SectionLabel>Progress</SectionLabel>
+          <span className="text-[11px] tabular-nums text-neutral-500">{pct}%</span>
+        </div>
+        <div className="mt-2 h-1.5 w-full rounded-full bg-neutral-200 overflow-hidden">
+          <div className="h-full rounded-full" style={{ width: `${pct}%`, background: color }} />
+        </div>
+        <div className="mt-2 flex items-center justify-between text-[10px] tabular-nums text-neutral-400">
+          <span>{formatStamp(start)}</span>
+          <span className="text-neutral-600">{formatStamp(cursor)}</span>
+          <span>{formatStamp(end)}</span>
+        </div>
+      </div>
+
+      {/* Route */}
+      <div className="px-6 mt-6 space-y-4">
+        <SectionLabel>Route</SectionLabel>
+        <RoutePoint label="Origin" value={mission.origin_point} tone="origin" />
+        <RoutePoint label="Destination" value={mission.destination_point} tone="destination" />
+      </div>
+
+      {/* Carrier + cargo */}
+      <div className="px-6 mt-6 grid grid-cols-2 gap-2">
+        <Stat label="Cargo" value={mission.cargo_type} />
+        <Stat label="Vehicles" value={mission.vehicles.length} />
+      </div>
+      <div className="px-6 mt-2">
+        <div className="flex items-center gap-3 rounded-xl ring-1 ring-black/5 px-4 py-3">
+          <span className="size-3 shrink-0 rounded-full" style={{ background: color }} />
+          <div className="text-sm font-medium">{mission.carrier_name}</div>
+          <div className="text-[11px] text-neutral-400 tabular-nums ml-auto">{mission.carrier_id}</div>
+        </div>
+      </div>
+
+      {/* Vehicles */}
+      <div className="px-6 mt-6 pb-6 space-y-2">
+        <SectionLabel>Vehicles en route</SectionLabel>
+        <div className="space-y-2">
+          {mission.vehicles.map((v) => (
+            <div key={v.id} className="flex items-center gap-3 rounded-xl ring-1 ring-black/5 px-4 py-3">
+              <div className="size-9 rounded-lg bg-neutral-100 flex items-center justify-center text-neutral-400">
+                <TruckGlyph />
+              </div>
+              <div className="flex-1 min-w-0">
+                <div className="text-sm font-semibold tabular-nums">{v.id}</div>
+                <div className="text-[11px] text-neutral-500 truncate">{v.vehicle_type}</div>
+              </div>
+              <span className="text-[11px] tabular-nums text-neutral-500">{pct}%</span>
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── Warehouse panel ──────────────────────────────────────────────────────────
 
 /** Right rail: full detail for the selected warehouse, fetched by id. */
 function WarehouseDetailPanel({ id, carrierColor }: { id: string; carrierColor?: string }) {
@@ -91,7 +161,7 @@ function WarehouseDetailPanel({ id, carrierColor }: { id: string; carrierColor?:
       <div className="px-6 pt-6">
         <div className="flex items-center justify-between">
           <SectionLabel>Warehouse · {w.id}</SectionLabel>
-          <Badge tone={availabilityTone(w.availability_status)}>{w.availability_status}</Badge>
+          <Badge tone={statusTone(w.availability_status)}>{w.availability_status}</Badge>
         </div>
         <h2 className="mt-3 text-2xl font-semibold tracking-tight">{w.name}</h2>
         <p className="mt-1 text-[11px] text-neutral-500 tabular-nums">
@@ -142,72 +212,36 @@ function WarehouseDetailPanel({ id, carrierColor }: { id: string; carrierColor?:
 }
 
 /**
- * Right rail: warehouse detail when one is selected. Falls back to a mission
- * detail only if a `mission` is explicitly passed; otherwise renders nothing.
+ * Right rail: warehouse detail or mission detail depending on what's selected;
+ * renders nothing when neither is.
  */
 export function RightSidebar({
-  mission,
   warehouseId,
   carrierColor,
+  mission,
+  missionProgress = 0,
+  missionCursor,
+  missionColor = "#6366f1",
 }: {
-  mission?: MissionDetail;
   warehouseId?: string | null;
   carrierColor?: string;
+  mission?: MissionAnimation | null;
+  missionProgress?: number;
+  missionCursor?: Date;
+  missionColor?: string;
 }) {
   if (warehouseId) {
     return <WarehouseDetailPanel id={warehouseId} carrierColor={carrierColor} />;
   }
-  if (mission) {
-    return <MissionDetailPanel mission={mission} />;
+  if (mission && missionCursor) {
+    return (
+      <MissionPanel
+        mission={mission}
+        progress={missionProgress}
+        cursor={missionCursor}
+        color={missionColor}
+      />
+    );
   }
   return null;
-}
-
-/** Right rail: detail view for the selected mission. */
-function MissionDetailPanel({ mission }: { mission: MissionDetail }) {
-  return (
-    <div className="flex flex-col h-full overflow-y-auto">
-      {/* Header */}
-      <div className="px-6 pt-6">
-        <div className="flex items-center justify-between">
-          <SectionLabel>Mission · {mission.id}</SectionLabel>
-          <Badge>{mission.status}</Badge>
-        </div>
-        <h2 className="mt-3 text-2xl font-semibold tracking-tight">{mission.title}</h2>
-        <p className="mt-1 text-[11px] text-neutral-500 tabular-nums">{mission.meta}</p>
-      </div>
-
-      {/* Deadline */}
-      <div className="mx-6 mt-5 rounded-xl bg-neutral-50 ring-1 ring-black/5 px-4 py-3">
-        <SectionLabel>Deadline</SectionLabel>
-        <div className="mt-1 text-2xl font-semibold tabular-nums">{mission.deadline}</div>
-      </div>
-
-      {/* Route */}
-      <div className="px-6 mt-6 space-y-4">
-        <SectionLabel>Route</SectionLabel>
-        <RoutePoint label="Origin" value={mission.origin} tone="origin" />
-        <RoutePoint label="Destination" value={mission.destination} tone="destination" />
-      </div>
-
-      {/* Carrier */}
-      <div className="px-6 mt-6">
-        <SectionLabel>Carrier</SectionLabel>
-        <div className="mt-2 rounded-xl ring-1 ring-black/5 px-4 py-3">
-          <div className="text-sm font-medium">{mission.carrier.name}</div>
-          <div className="text-[11px] text-neutral-500">{mission.carrier.city}</div>
-        </div>
-      </div>
-
-      {/* Assigned vehicles */}
-      <div className="px-6 mt-6 space-y-2">
-        <SectionLabel>Assigned vehicles</SectionLabel>
-        <div className="space-y-2">
-          {mission.vehicles.map((v) => (
-            <VehicleRow key={v.id} {...v} />
-          ))}
-        </div>
-      </div>
-    </div>
-  );
 }

@@ -93,6 +93,74 @@ export type WarehouseSummary = {
   lng: number;
 };
 
+// --- Missions (list + animated playback) -----------------------------------
+
+/** Row in the mission list — the lean shape used for the rail + filtering. */
+export type MissionListItem = {
+  id: string;
+  cargo_type: string;
+  carrier_id: string;
+  carrier_name: string;
+  origin_point: string;
+  destination_point: string;
+  priority: string;
+  status: string;
+};
+
+/** A mission's overall path (origin → destination polyline), for the map overlay. */
+export type MissionPath = {
+  id: string;
+  carrier_id: string;
+  route: LatLng[];
+};
+
+/** One vehicle on a mission, with the route polyline it drives. */
+export type MissionVehicleTrack = {
+  id: string;
+  vehicle_type: string;
+  carrier_id: string;
+  /** Ordered [lat, lng] points making up the driven path. */
+  route: LatLng[];
+};
+
+/**
+ * Full mission payload used to drive the map animation. Every vehicle advances
+ * at the same normalized rate between `start` and `end`, so a single timeline
+ * cursor positions all of them at once.
+ */
+export type MissionAnimation = {
+  id: string;
+  cargo_type: string;
+  carrier_id: string;
+  carrier_name: string;
+  origin_point: string;
+  destination_point: string;
+  origin: LatLng;
+  destination: LatLng;
+  /** ISO 8601 — when the mission departs. */
+  start: string;
+  /** ISO 8601 — when the mission is due / arrives. */
+  end: string;
+  priority: string;
+  status: string;
+  vehicles: MissionVehicleTrack[];
+};
+
+// --- Crisis map ------------------------------------------------------------
+
+/** Lean crisis-map object returned by GET /crisis/ (summary + coordinates). */
+export type CrisisSummary = {
+  id: string;
+  object_type: string;
+  name: string;
+  city: string;
+  voivodeship: string;
+  severity: string;
+  status: string;
+  lat: number;
+  lng: number;
+};
+
 /** Full warehouse record returned by GET /warehouse/{id}/. */
 export type WarehouseDetail = {
   id: string;

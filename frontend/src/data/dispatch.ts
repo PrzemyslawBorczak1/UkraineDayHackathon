@@ -7,9 +7,9 @@ import type { MissionDetail, MissionResult, NavEntry } from "../types";
  */
 
 export const NAV_ENTRIES: NavEntry[] = [
-  { id: "tasks", label: "Tasks", count: 240 },
-  { id: "vehicles", label: "Carriers' Vehicles", count: 640 },
+  { id: "tasks", label: "Missions", count: 240 },
   { id: "warehouses", label: "Warehouses", count: 36 },
+  { id: "crisis", label: "Crisis", count: 55 },
 ];
 
 export const STATUS_FILTERS = ["queued", "transit", "delivered", "delayed"] as const;
