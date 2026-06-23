@@ -1,35 +1,24 @@
 /**
- * Mission API client.
+ * Mission API client — talks to the FastAPI backend under /api/v1.
  *
- * Currently returns MOCK data (100 generated missions, see ./mockMissions) so
- * the map has lots of routes to draw. To go back to the backend, swap each body
- * for the commented `api.get(...)` call.
+ * The backend returns the exact shapes the UI consumes (coords as [lat, lng],
+ * ISO timestamps, per-vehicle routes from the seeded tasks), so these are thin
+ * pass-throughs. The mock generator lives in ./mockMissions if ever needed.
  */
 import type { MissionAnimation, MissionListItem } from "../types";
-import { MOCK_MISSION_ANIMATIONS, MOCK_MISSION_LIST } from "./mockMissions";
-// import { api } from "../lib/api";
-
-const delay = (ms: number) => new Promise((r) => setTimeout(r, ms));
+import { api } from "../lib/api";
 
 /** List missions for the rail (lean shape used for filtering). */
 export async function listMissions(): Promise<MissionListItem[]> {
-  // return api.get<MissionListItem[]>("/api/v1/missions?limit=60");
-  await delay(200);
-  return MOCK_MISSION_LIST;
+  return api.get<MissionListItem[]>("/api/v1/missions?limit=200");
 }
 
 /** Full payloads (route + vehicles + window) for every mission on the timeline. */
 export async function listMissionAnimations(): Promise<MissionAnimation[]> {
-  // return api.get<MissionAnimation[]>("/api/v1/missions/animations?limit=30");
-  await delay(200);
-  return MOCK_MISSION_ANIMATIONS;
+  return api.get<MissionAnimation[]>("/api/v1/missions/animations?limit=100");
 }
 
 /** Full animation payload for a single mission. */
 export async function getMissionDetail(id: string): Promise<MissionAnimation> {
-  // return api.get<MissionAnimation>(`/api/v1/missions/${id}`);
-  await delay(200);
-  const found = MOCK_MISSION_ANIMATIONS.find((m) => m.id === id);
-  if (!found) throw new Error(`Mission ${id} not found`);
-  return found;
+  return api.get<MissionAnimation>(`/api/v1/missions/${id}`);
 }

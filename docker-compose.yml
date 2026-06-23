@@ -16,6 +16,22 @@ services:
       timeout: 5s
       retries: 5
 
+  loader:
+    build: ./backend
+    container_name: loader
+    volumes:
+      - ./backend:/app
+      - ../DayOneUkraineHackathon/csv:/data/csv
+    environment:
+      - PYTHONUNBUFFERED=1
+      - DATABASE_URL=postgresql+psycopg://crisis:crisis@db:5432/crisis
+    depends_on:
+      db:
+        condition: service_healthy
+    # One-shot: reset the schema and seed all CSV data + tasks, then exit.
+    command: python -m app.load
+    restart: "no"
+
   backend:
     build: ./backend
     container_name: backend
@@ -31,6 +47,8 @@ services:
     depends_on:
       db:
         condition: service_healthy
+      loader:
+        condition: service_completed_successfully
     command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
 
   recommendations:
