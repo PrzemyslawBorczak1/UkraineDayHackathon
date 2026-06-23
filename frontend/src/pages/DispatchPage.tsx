@@ -42,7 +42,13 @@ const PLAYBACK_SECONDS = 30;
  * time inside that window, so as the cursor moves, routes appear when a mission
  * begins, the vehicles drive along, and they disappear once it's delivered.
  */
-export function DispatchPage({ onNewMission }: { onNewMission: () => void }) {
+export function DispatchPage({
+  onNewMission,
+  onSummary,
+}: {
+  onNewMission: () => void;
+  onSummary: () => void;
+}) {
   const [activeNav, setActiveNav] = useState(NAV_ENTRIES[0]?.id);
 
   // ── Warehouses ──
@@ -265,7 +271,7 @@ export function DispatchPage({ onNewMission }: { onNewMission: () => void }) {
         {/* Right cluster: stacked actions. */}
         <div className="flex flex-col items-end gap-2 pointer-events-auto">
           <CtaPill variant="ghost" onClick={onNewMission}>+ New mission</CtaPill>
-          <CtaPill>Summary →</CtaPill>
+          <CtaPill onClick={onSummary}>Summary →</CtaPill>
         </div>
       </div>
     </DispatchShell>
