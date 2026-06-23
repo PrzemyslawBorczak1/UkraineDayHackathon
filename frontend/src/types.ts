@@ -170,11 +170,11 @@ export type MissionAnimation = {
 export type MissionProposition = {
   origin_id: string;       // Warehouse ID
   destination_id: string;  // Crisis-map object ID
-  proponowany_typ_ladunku: string;
-  wymagany_typ_pojazdu: string;
-  priorytet: string;
-  szacowany_dystans_km: number;
-  uzasadnienie: string;
+  proposed_cargo_type: string;
+  required_vehicle_type: string;
+  priority: string;
+  estimated_distance_km: number;
+  justification: string;
 };
 
 /** A proposition enriched with resolved origin/destination display names. */
