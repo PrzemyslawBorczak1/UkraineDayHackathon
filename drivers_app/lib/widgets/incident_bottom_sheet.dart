@@ -144,7 +144,7 @@ class _IncidentBottomSheetState extends State<IncidentBottomSheet> {
             maxLines: 3,
             style: const TextStyle(color: AppTheme.textHigh, fontSize: 15),
             decoration: const InputDecoration(
-              labelText: 'Opis (Optional)',
+              labelText: 'Description (Optional)',
               alignLabelWithHint: true,
             ),
           ),

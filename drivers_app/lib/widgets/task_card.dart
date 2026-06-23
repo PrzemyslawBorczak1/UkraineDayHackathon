@@ -9,8 +9,15 @@ import '../theme/app_theme.dart';
 /// Upcoming tasks: compact single-row summary.
 class TaskCard extends StatelessWidget {
   final Task task;
+  final VoidCallback? onFinish;
+  final VoidCallback? onMap;
 
-  const TaskCard({super.key, required this.task});
+  const TaskCard({
+    super.key, 
+    required this.task,
+    this.onFinish,
+    this.onMap,
+  });
 
   String _hh(DateTime t) =>
       '${t.hour.toString().padLeft(2, '0')}:${t.minute.toString().padLeft(2, '0')}';
@@ -106,6 +113,40 @@ class TaskCard extends StatelessWidget {
                 const SizedBox(height: 16),
                 _buildRequirementsStrip(),
               ],
+
+              const SizedBox(height: 24),
+              // ── Actions ───────────────────────────────────────────────
+              Row(
+                children: [
+                  Expanded(
+                    child: OutlinedButton.icon(
+                      onPressed: onMap,
+                      icon: const Icon(Icons.map_rounded, size: 18),
+                      label: const Text('Map'),
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: AppTheme.textHigh,
+                        side: const BorderSide(color: AppTheme.border),
+                        padding: const EdgeInsets.symmetric(vertical: 12),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    flex: 2,
+                    child: ElevatedButton.icon(
+                      onPressed: onFinish,
+                      icon: const Icon(Icons.check_circle_outline_rounded, size: 18),
+                      label: const Text('Finish Task'),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: AppTheme.success,
+                        foregroundColor: AppTheme.background,
+                        padding: const EdgeInsets.symmetric(vertical: 12),
+                        elevation: 0,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
             ],
           ),
         ),

@@ -3,7 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import 'screens/login_screen.dart';
-import 'services/http_api_service.dart';
+import 'services/mock_api_service.dart';
 import 'theme/app_theme.dart';
 
 /// Optional override, e.g. for a physical device on the same LAN:
@@ -55,7 +55,7 @@ class CrisisLogisticsApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final api = HttpApiService(baseUrl: resolveBaseUrl());
+    final api = MockApiService();
 
     return MaterialApp(
       title: 'Crisis Logistics',

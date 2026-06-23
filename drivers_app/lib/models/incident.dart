@@ -1,7 +1,7 @@
 /// Incident types that a driver can report.
 enum IncidentType {
-  endMission('Koniec misji'),
-  delay('Opóźnienie');
+  endMission('End mission'),
+  delay('Delay');
 
   final String label;
   const IncidentType(this.label);

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import '../models/task.dart';
 import '../services/api_service.dart';
@@ -137,7 +138,31 @@ class _MainScreenState extends State<MainScreen> {
               physics: const AlwaysScrollableScrollPhysics(),
               padding: const EdgeInsets.fromLTRB(16, 8, 16, 80),
               itemCount: tasks.length,
-              itemBuilder: (_, i) => TaskCard(task: tasks[i]),
+              itemBuilder: (_, i) {
+                final task = tasks[i];
+                return TaskCard(
+                  task: task,
+                  onFinish: task.isCurrent
+                      ? () async {
+                          await widget.api.finishTask(task.id);
+                          _refresh();
+                        }
+                      : null,
+                  onMap: task.isCurrent
+                      ? () async {
+                          final uri = Uri.parse(
+                            'https://www.google.com/maps/dir/?api=1'
+                            '&origin=${Uri.encodeComponent(task.origin)}'
+                            '&destination=${Uri.encodeComponent(task.destination)}',
+                          );
+                          if (await canLaunchUrl(uri)) {
+                            await launchUrl(uri,
+                                mode: LaunchMode.externalApplication);
+                          }
+                        }
+                      : null,
+                );
+              },
             ),
           );
         },
