@@ -10,7 +10,7 @@ from sqlalchemy import text
 
 from app.database import get_db, init_db
 from app.models import Carrier, Vehicle, Warehouse, Mission, CrisisObject, Budget
-from app.routers import driver, missions, warehouses
+from app.routers import driver, missions, warehouses, allocation, crisis
 
 
 @asynccontextmanager
@@ -38,6 +38,8 @@ app.add_middleware(
 app.include_router(driver.router)
 app.include_router(missions.router)
 app.include_router(warehouses.router)
+app.include_router(allocation.router)
+app.include_router(crisis.router)
 
 
 @app.exception_handler(StarletteHTTPException)

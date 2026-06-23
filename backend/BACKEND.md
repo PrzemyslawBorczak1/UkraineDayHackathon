@@ -14,6 +14,10 @@ backend/app/
 ├── load.py              # import CSV -> DB (python -m app.load)
 ├── main.py              # FastAPI app + include_router
 ├── serialize.py         # ORM -> dict (geom -> {lat,lng}, daty -> ISO)
+├── engine_adapter.py    # interwały silnika -> Task (mapowanie faz)
+├── allocation/
+│   ├── engine.py        # wendorowany silnik ALNS (z engine/main.py)
+│   └── pipeline.py      # DB -> dataclassy silnika -> scheduler -> Task
 ├── models/
 │   ├── carrier.py       # Carrier (C001-C050)
 │   ├── vehicle.py       # Vehicle (V0001+)
@@ -26,7 +30,9 @@ backend/app/
 ├── routers/
 │   ├── driver.py        # flow kierowcy (auth/tasks/incident/vehicle) — /api/v1
 │   ├── missions.py      # tworzenie misji — /api/v1
-│   └── warehouses.py    # lista + szczegóły magazynów — /warehouse
+│   ├── warehouses.py    # lista + szczegóły magazynów — /warehouse
+│   ├── crisis.py        # lista + szczegóły obiektów crisis-map — /crisis
+│   └── allocation.py    # uruchomienie alokacji — /api/v1
 ├── events/
 │   ├── types.py         # EventType (driver/carrier/coordinator/system)
 │   ├── mission_event.py # MissionEvent (append-only log)
@@ -90,6 +96,18 @@ Koordynator:
 - `POST /api/v1/missions` - tworzenie misji (status NEW, auto-id; parsuje temp/ADR/liftgate z noty)
 - `GET /warehouse/` - lista magazynów (pola summary/filtrowania)
 - `GET /warehouse/{warehouseId}/` - pełny model magazynu
+- `GET /crisis/` - lista obiektów crisis-map (summary + lat/lng)
+- `GET /crisis/{objectId}/` - pełny model obiektu crisis-map
+- `POST /api/v1/allocate?day=YYYY-MM-DD&iterations=2` - uruchamia alokację na dany
+  dzień, zapisuje harmonogram jako Taski (idempotentnie), zwraca summary
+
+### Potok alokacji (`allocation/pipeline.py`)
+
+`run_allocation(db, day, iterations)`: DB → dataclassy silnika → `DailyALNSScheduler`
+→ `engine_adapter.persist_schedule` → wiersze `tasks`. Silnik karmiony w tonach/m³
+(matematyka jest ratiowa, brak konwersji kg). Twardy filtr: pojazdy carrierów
+`Do not use` są wykluczane. Origin/destination misji → syntetyczne magazyny 24/7
+(do czasu wpięcia realnych). Daty konwertowane na naive UTC (silnik zakłada naive).
 
 > Endpointy taskowe niejawnie aktualizują stan misji przez event log
 > (`task.mission_id` → `emit_event`). MVP: dostarczenie jednego taska emituje

@@ -91,6 +91,11 @@ def _task_payload(task: Task) -> dict:
         "destination": m.destination_point,
         "destination_address": m.dest_address,
         "destination_coordinates": _point(m.dest_geom),
+        # Explicit start/end of the task (currently the mission origin/destination).
+        "start_address": m.origin_address,
+        "start_coordinates": _point(m.origin_geom),
+        "end_address": m.dest_address,
+        "end_coordinates": _point(m.dest_geom),
         "weight": task.allocated_weight if task.allocated_weight is not None else m.weight_t,
         "volume": task.allocated_volume if task.allocated_volume is not None else m.volume_m3,
         "special_requirements": special,
