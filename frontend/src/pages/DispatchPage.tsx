@@ -142,15 +142,15 @@ export function DispatchPage({
     const wh = warehouses.find((w) => w.id === p.origin_id);
     const cr = crisis.find((c) => c.id === p.destination_id);
     onNewMission({
-      cargo_type: p.proponowany_typ_ladunku,
+      cargo_type: p.proposed_cargo_type,
       origin_warehouse_id: wh?.id ?? "",
       destination_point: cr?.name ?? p.destination_id,
       dest_lat: cr ? String(cr.lat) : "",
       dest_lng: cr ? String(cr.lng) : "",
-      route_distance_km: String(Math.round(p.szacowany_dystans_km)),
-      required_vehicle_type: p.wymagany_typ_pojazdu,
-      priority: p.priorytet,
-      special_requirement: p.uzasadnienie,
+      route_distance_km: String(Math.round(p.estimated_distance_km)),
+      required_vehicle_type: p.required_vehicle_type,
+      priority: p.priority,
+      special_requirement: p.justification,
     });
   };
 
