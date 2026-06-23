@@ -1,14 +1,15 @@
-import { Fragment, useEffect } from "react";
+import { Fragment, useEffect, useMemo } from "react";
 import { CircleMarker, Polyline, Tooltip, useMap } from "react-leaflet";
 import L from "leaflet";
 import type { MissionAnimation } from "../../types";
 import { pointAlongRoute, progressOf } from "../../lib/geo";
+import { useOSRMRoutes } from "../../hooks/useOSRMRoutes";
 
 /** Fits the map to every mission's route once, when the set loads. */
 function FitToAll({ animations }: { animations: MissionAnimation[] }) {
   const map = useMap();
   useEffect(() => {
-    const points = animations.flatMap((a) => a.vehicles.flatMap((v) => v.route));
+    const points = animations.flatMap((a) => [a.origin, a.destination]);
     if (points.length === 0) return;
     map.fitBounds(L.latLngBounds(points as [number, number][]), { padding: [56, 56], maxZoom: 8 });
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -34,6 +35,13 @@ export function MissionTimelineLayer({
   selectedId: string | null;
   onSelect: (id: string) => void;
 }) {
+  const routeRequests = useMemo(
+    () => animations.map((a) => ({ id: a.id, origin: a.origin, destination: a.destination })),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [animations.length]
+  );
+  const osrmRoutes = useOSRMRoutes(routeRequests);
+
   return (
     <>
       {animations.map((a) => {
@@ -45,6 +53,7 @@ export function MissionTimelineLayer({
         const progress = progressOf(start, end, cursorMs);
         const color = colors.get(a.carrier_id) ?? "#6366f1";
         const isSelected = selectedId === a.id;
+        const roadRoute = osrmRoutes.get(a.id);
 
         return (
           <Fragment key={a.id}>
@@ -66,11 +75,12 @@ export function MissionTimelineLayer({
 
             {/* Per-vehicle dashed route + moving marker */}
             {a.vehicles.map((v) => {
-              const pos = pointAlongRoute(v.route, progress);
+              const route = roadRoute ?? v.route;
+              const pos = pointAlongRoute(route, progress);
               return (
                 <Fragment key={v.id}>
                   <Polyline
-                    positions={v.route}
+                    positions={route}
                     pathOptions={{
                       color,
                       weight: isSelected ? 3 : 2,
@@ -80,7 +90,7 @@ export function MissionTimelineLayer({
                     eventHandlers={{ click: () => onSelect(a.id) }}
                   />
                   <CircleMarker
-                    center={pos}
+                    center={pos as [number, number]}
                     radius={isSelected ? 9 : 7}
                     pathOptions={{
                       color: isSelected ? "#111827" : "#ffffff",
