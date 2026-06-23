@@ -199,10 +199,9 @@ def load_missions(session, csv_path: Path):
                 available_from=parse_datetime(row["available_from"]),
                 deadline=parse_datetime(row["deadline"]),
                 estimated_cost=parse_float(row["Estimated Cost (PLN)"]),
-                # CSV status is always "Pending" at generation time; normalise to
-                # the canonical initial state so Mission.status (cache) matches
-                # replay_mission_state(), which seeds from NEW.
-                status=MissionStatus.NEW,
+                # Demo assumption: every mission's origin-warehouse carrier has
+                # already accepted, so missions start ACCEPTED (ready to allocate).
+                status=MissionStatus.ACCEPTED,
                 requesting_authority=row["Requesting Authority"],
                 special_requirement=special_requirement,
                 required_temperature=temp_range,
@@ -255,6 +254,33 @@ def seed_tasks(session):
 
     session.commit()
     print(f"  Seeded {session.query(Task).count()} tasks across {len(missions)} missions")
+
+
+def seed_tasks_or_allocate(session):
+    """Populate tasks. By default RUN THE REAL ALLOCATION ENGINE so the demo shows
+    actual algorithm output (routes/tasks); fall back to random seeding only when
+    ALLOCATE_ON_LOAD=0.
+
+    Tunables (env): ALLOCATE_ITERATIONS (ALNS iterations), ALLOCATE_DAYS (how many
+    days to schedule). More = better schedule, slower load.
+    """
+    if os.getenv("ALLOCATE_ON_LOAD", "1") != "1":
+        seed_tasks(session)
+        return
+
+    from app.allocation.pipeline import run_allocation
+
+    iterations = int(os.getenv("ALLOCATE_ITERATIONS", "100"))
+    # ALLOCATE_DAYS unset -> full span (ALL missions, earliest -> latest deadline).
+    days_env = os.getenv("ALLOCATE_DAYS")
+    days = int(days_env) if days_env else None
+    print(f"Running allocation engine over {'ALL missions' if days is None else f'{days} days'} "
+          f"(iterations={iterations})...")
+    summary = run_allocation(session, iterations=iterations, days=days)
+    print(f"  Allocation done: {summary}")
+    if summary.get("tasks_created", 0) == 0:
+        print("  Engine produced no tasks; falling back to random seeding")
+        seed_tasks(session)
 
 
 def load_public_verification(session, csv_path: Path):
@@ -343,10 +369,11 @@ def load_all():
         load_vehicles(session, CSV_DIR / "vehicles.csv")
         load_warehouses(session, CSV_DIR / "warehouses.csv")
         load_missions(session, CSV_DIR / "missions.csv")
-        seed_tasks(session)
+        # verification/budget are needed by the allocation engine (scoring + budget)
         load_public_verification(session, CSV_DIR / "public_verification.csv")
         load_crisis_map(session, CSV_DIR / "crisis_map.csv")
         load_budget(session, CSV_DIR / "budget.csv")
+        seed_tasks_or_allocate(session)
 
         print("\nData load complete!")
 

@@ -112,8 +112,17 @@ porcie 8001. Backend woła go pod `RECOMMENDATIONS_URL` (domyślnie
 `http://recommendations:8001`). **Wymaga `OPENAI_API_KEY`** — ustaw w `.env`
 obok `docker-compose.yml` (compose interpoluje `${OPENAI_API_KEY}`); bez klucza
 kontener `recommendations` nie wstanie, ale reszta systemu działa (backend zwróci 502).
-- `POST /api/v1/allocate?day=YYYY-MM-DD&iterations=2` - uruchamia alokację na dany
-  dzień, zapisuje harmonogram jako Taski (idempotentnie), zwraca summary
+- `POST /api/v1/allocate?day=YYYY-MM-DD&iterations=2&days=1` - uruchamia alokację na
+  okno `days` dni, zapisuje harmonogram jako Taski (idempotentnie), zwraca summary
+
+> **Seed przy ładowaniu:** misje ładują się jako `ACCEPTED` (demo: wszyscy zaakceptowali),
+> a `load.py` domyślnie odpala **realny silnik na WSZYSTKICH misjach** (pełne okno
+> earliest→latest deadline) i przypisane misje przechodzą w `IN_PROGRESS`.
+> Tunable przez env: `ALLOCATE_ITERATIONS` (domyślnie **100**), `ALLOCATE_DAYS`
+> (puste = wszystkie misje; liczba = węższe okno), `ALLOCATE_ON_LOAD=0` → losowy seed.
+> **Uwaga:** pełne okno + 4000 misji to ~kilka minut przy starcie; wysokie
+> `ALLOCATE_ITERATIONS` mnożą ten czas. Endpoint: `POST /api/v1/allocate` (bez `days`
+> = wszystkie misje, np. `?iterations=20`).
 
 ### Potok alokacji (`allocation/pipeline.py`)
 

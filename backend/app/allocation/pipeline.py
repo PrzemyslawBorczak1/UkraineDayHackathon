@@ -183,25 +183,36 @@ def _daily_budget(db: Session) -> EBudget:
     )
 
 
-def run_allocation(db: Session, day: Optional[date] = None, iterations: int = 2) -> dict:
-    """Run allocation for one day and persist the schedule as Tasks.
+def run_allocation(
+    db: Session, day: Optional[date] = None, iterations: int = 2,
+    days: Optional[int] = None,
+) -> dict:
+    """Run allocation and persist the schedule as Tasks.
 
     `day` defaults to the earliest available_from among allocatable missions.
-    Returns a summary dict.
+    `days` is the window length; **None = span ALL missions** (earliest
+    available_from → latest deadline). More `iterations` / a wider window =
+    better (and slower) schedule. Returns a summary dict.
     """
-    if day is None:
-        earliest = (
-            db.query(func.min(Mission.available_from))
-            .filter(Mission.status.in_(_ALLOCATABLE))
-            .scalar()
-        )
-        if earliest is None:
-            return {"day": None, "tasks_created": 0, "missions_considered": 0,
-                    "missions_assigned": 0, "vehicles_used": 0}
-        day = _naive(earliest).date()
+    bounds = (
+        db.query(func.min(Mission.available_from), func.max(Mission.deadline))
+        .filter(Mission.status.in_(_ALLOCATABLE))
+        .one()
+    )
+    earliest, latest = bounds
+    if earliest is None:
+        return {"day": None, "days": days, "iterations": iterations,
+                "tasks_created": 0, "missions_considered": 0,
+                "missions_assigned": 0, "vehicles_used": 0}
 
+    if day is None:
+        day = _naive(earliest).date()
     window_start = datetime.combine(day, time(0, 0))
-    window_end = window_start + timedelta(days=1)
+    if days is None:
+        # Full span: cover every mission up to the latest deadline.
+        window_end = _naive(latest) + timedelta(days=1)
+    else:
+        window_end = window_start + timedelta(days=max(1, days))
 
     ecarriers, do_not_use = _build_carriers(db)
     vehicles = _build_vehicles(db, ecarriers, do_not_use)
@@ -217,13 +228,33 @@ def run_allocation(db: Session, day: Optional[date] = None, iterations: int = 2)
     )
 
     tasks = persist_schedule(db, vehicles)
+    _reflect_assignment_on_missions(db, tasks)
 
     assigned = {t.mission_id for t in tasks}
     used = {t.vehicle_id for t in tasks}
     return {
         "day": day.isoformat(),
+        "days": days,
+        "iterations": iterations,
         "tasks_created": len(tasks),
         "missions_considered": len(missions),
         "missions_assigned": len(assigned),
         "vehicles_used": len(used),
     }
+
+
+def _reflect_assignment_on_missions(db: Session, tasks) -> None:
+    """Fill mission.assigned_vehicle/carrier and flip status to IN_PROGRESS so the
+    coordinator map shows real carriers + convoys."""
+    veh_carrier = dict(db.query(Vehicle.id, Vehicle.carrier_id).all())
+    seen: set[str] = set()
+    for t in tasks:
+        if t.mission_id in seen:
+            continue
+        seen.add(t.mission_id)
+        m = db.query(Mission).filter(Mission.id == t.mission_id).first()
+        if m is not None:
+            m.assigned_vehicle_id = t.vehicle_id
+            m.assigned_carrier_id = veh_carrier.get(t.vehicle_id)
+            m.status = MissionStatus.IN_PROGRESS
+    db.commit()

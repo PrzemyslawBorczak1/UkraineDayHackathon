@@ -16,9 +16,10 @@ router = APIRouter(prefix="/api/v1", tags=["allocation"])
 
 @router.post("/allocate")
 def allocate(
-    day: Optional[date] = Query(None, description="Day to schedule (YYYY-MM-DD); defaults to earliest"),
-    iterations: int = Query(2, ge=0, le=20),
+    day: Optional[date] = Query(None, description="First day to schedule (YYYY-MM-DD); defaults to earliest"),
+    iterations: int = Query(2, ge=0, le=2000),
+    days: Optional[int] = Query(None, ge=1, le=120, description="Window length in days; omit = ALL missions"),
     db: Session = Depends(get_db),
 ):
-    """Run allocation for one day and (re)write Task rows. Returns a summary."""
-    return run_allocation(db, day=day, iterations=iterations)
+    """Run allocation over a window and (re)write Task rows. Returns a summary."""
+    return run_allocation(db, day=day, iterations=iterations, days=days)
