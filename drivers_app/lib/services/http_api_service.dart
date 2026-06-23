@@ -5,6 +5,7 @@ import '../models/auth_result.dart';
 import '../models/incident.dart';
 import '../models/task.dart';
 import '../models/vehicle.dart';
+import '../models/warehouse.dart';
 import 'api_service.dart';
 
 /// HTTP implementation of [ApiService] connecting to the FastAPI backend.
@@ -50,6 +51,17 @@ class HttpApiService implements ApiService {
       throw Exception('Failed to load vehicle: ${response.statusCode}');
     }
     return Vehicle.fromJson(jsonDecode(response.body) as Map<String, dynamic>);
+  }
+
+  @override
+  Future<Warehouse> getWarehouse(String name) async {
+    final response = await _client
+        .get(Uri.parse('$_api/warehouses/${Uri.encodeComponent(name)}'), headers: _headers)
+        .timeout(_timeout);
+    if (response.statusCode != 200) {
+      throw Exception('Failed to load warehouse: ${response.statusCode}');
+    }
+    return Warehouse.fromJson(jsonDecode(response.body) as Map<String, dynamic>);
   }
 
   // ─── Tasks ─────────────────────────────────────────────────────────

@@ -11,12 +11,14 @@ class TaskCard extends StatelessWidget {
   final Task task;
   final VoidCallback? onFinish;
   final VoidCallback? onMap;
+  final ValueChanged<String>? onWarehouseClick;
 
   const TaskCard({
     super.key, 
     required this.task,
     this.onFinish,
     this.onMap,
+    this.onWarehouseClick,
   });
 
   String _hh(DateTime t) =>
@@ -203,11 +205,16 @@ class TaskCard extends StatelessWidget {
         // Locations row
         Row(
           children: [
-            Text(task.origin,
-                style: const TextStyle(
-                    fontSize: 15,
-                    fontWeight: FontWeight.w500,
-                    color: AppTheme.textMid)),
+            GestureDetector(
+              onTap: () => onWarehouseClick?.call(task.origin),
+              child: Text(task.origin,
+                  style: const TextStyle(
+                      fontSize: 15,
+                      fontWeight: FontWeight.w600,
+                      color: AppTheme.primary,
+                      decoration: TextDecoration.underline,
+                      decorationColor: AppTheme.primary)),
+            ),
             const Spacer(),
             if (waitMin > 0)
               Row(
@@ -224,11 +231,16 @@ class TaskCard extends StatelessWidget {
                   const SizedBox(width: 12),
                 ],
               ),
-            Text(task.destination,
-                style: const TextStyle(
-                    fontSize: 15,
-                    fontWeight: FontWeight.w500,
-                    color: AppTheme.textMid)),
+            GestureDetector(
+              onTap: () => onWarehouseClick?.call(task.destination),
+              child: Text(task.destination,
+                  style: const TextStyle(
+                      fontSize: 15,
+                      fontWeight: FontWeight.w600,
+                      color: AppTheme.primary,
+                      decoration: TextDecoration.underline,
+                      decorationColor: AppTheme.primary)),
+            ),
           ],
         ),
       ],
@@ -348,15 +360,21 @@ class TaskCard extends StatelessWidget {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(task.origin,
-                          overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(
-                              fontSize: 14, color: AppTheme.textMid)),
+                      GestureDetector(
+                        onTap: () => onWarehouseClick?.call(task.origin),
+                        child: Text(task.origin,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(
+                                fontSize: 14, color: AppTheme.primary, decoration: TextDecoration.underline)),
+                      ),
                       const SizedBox(height: 2),
-                      Text(task.destination,
-                          overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(
-                              fontSize: 14, color: AppTheme.textMid)),
+                      GestureDetector(
+                        onTap: () => onWarehouseClick?.call(task.destination),
+                        child: Text(task.destination,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(
+                                fontSize: 14, color: AppTheme.primary, decoration: TextDecoration.underline)),
+                      ),
                     ],
                   ),
                 ),

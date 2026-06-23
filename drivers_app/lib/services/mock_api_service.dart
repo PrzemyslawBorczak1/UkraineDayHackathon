@@ -2,6 +2,7 @@ import '../models/auth_result.dart';
 import '../models/incident.dart';
 import '../models/task.dart';
 import '../models/vehicle.dart';
+import '../models/warehouse.dart';
 import 'api_service.dart';
 
 /// Mock implementation of [ApiService] for offline development.
@@ -31,6 +32,18 @@ class MockApiService implements ApiService {
       operationalRange: 1200,
       features: ['Temperature control', 'Liftgate'],
       restrictions: ['No city centre'],
+    );
+  }
+
+  @override
+  Future<Warehouse> getWarehouse(String name) async {
+    await Future.delayed(_delay);
+    return Warehouse(
+      name: name,
+      coordinates: {'lat': 52.2297, 'lng': 21.0122}, // Mock coordinates
+      availableCapacityPercent: 75,
+      availabilityHours: '06:00 - 22:00',
+      dockDoors: 4,
     );
   }
 

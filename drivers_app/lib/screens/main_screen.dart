@@ -54,6 +54,66 @@ class _MainScreenState extends State<MainScreen> {
     );
   }
 
+  void _showWarehousePopup(String name) {
+    showDialog(
+      context: context,
+      builder: (_) => AlertDialog(
+        backgroundColor: AppTheme.surface,
+        title: Text(name, style: const TextStyle(color: AppTheme.textHigh)),
+        content: FutureBuilder(
+          future: widget.api.getWarehouse(name),
+          builder: (context, snapshot) {
+            if (snapshot.connectionState == ConnectionState.waiting) {
+              return const SizedBox(
+                height: 100,
+                child: Center(child: CircularProgressIndicator(color: AppTheme.primary)),
+              );
+            }
+            if (snapshot.hasError) {
+              return const Text('Failed to load warehouse data', style: TextStyle(color: AppTheme.danger));
+            }
+            
+            final w = snapshot.data!;
+            return Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                _infoRow('Capacity', '${w.availableCapacityPercent}% available'),
+                const SizedBox(height: 8),
+                _infoRow('Hours', w.availabilityHours),
+                const SizedBox(height: 8),
+                _infoRow('Dock Doors', '${w.dockDoors} available'),
+                const SizedBox(height: 8),
+                _infoRow('Coords', '${w.coordinates['lat']}, ${w.coordinates['lng']}'),
+              ],
+            );
+          },
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: const Text('Close'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _infoRow(String label, String value) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        SizedBox(
+          width: 80,
+          child: Text(label, style: const TextStyle(color: AppTheme.textLow, fontSize: 13)),
+        ),
+        Expanded(
+          child: Text(value, style: const TextStyle(color: AppTheme.textHigh, fontSize: 14, fontWeight: FontWeight.w500)),
+        ),
+      ],
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -161,6 +221,7 @@ class _MainScreenState extends State<MainScreen> {
                           }
                         }
                       : null,
+                  onWarehouseClick: _showWarehousePopup,
                 );
               },
             ),
