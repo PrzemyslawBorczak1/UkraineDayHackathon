@@ -7,6 +7,7 @@ Run: python -m app.load
 import csv
 import os
 import re
+import random
 from datetime import datetime, date
 from pathlib import Path
 
@@ -16,12 +17,20 @@ from geoalchemy2.shape import from_shape
 from app.database import engine, SessionLocal, init_db, Base
 from app.models import (
     Carrier, Vehicle, Warehouse, Mission,
-    PublicVerification, CrisisObject, Budget
+    PublicVerification, CrisisObject, Budget, Task
 )
 from app.models.mission import MissionStatus
+from app.models.task import TaskStatus
 
 # Path to CSV directory (mounted as /data/csv in Docker, or local path)
 CSV_DIR = Path(os.getenv("CSV_DIR", "/data/csv"))
+
+# Task seeding: how many missions get vehicle assignments, vehicles per mission,
+# and a fixed RNG seed so reseeding is deterministic.
+SEED_TASK_MISSIONS = int(os.getenv("SEED_TASK_MISSIONS", "2000"))
+SEED_TASK_MIN_VEHICLES = 1
+SEED_TASK_MAX_VEHICLES = 4
+SEED_TASK_RNG = 20260623
 
 
 def parse_bool(value: str) -> bool:
@@ -205,6 +214,49 @@ def load_missions(session, csv_path: Path):
     print(f"  Loaded {session.query(Mission).count()} missions")
 
 
+def seed_tasks(session):
+    """Seed lots of tasks by assigning vehicles to missions.
+
+    Each chosen mission gets 1-N vehicles (one Task per vehicle), with the task
+    window inherited from the mission. The mission's assigned_vehicle/carrier are
+    also filled so the coordinator map shows real carriers + convoys.
+    """
+    print("Seeding tasks (vehicle <-> mission assignments)...")
+    rng = random.Random(SEED_TASK_RNG)
+
+    vehicles = session.query(Vehicle).all()
+    if not vehicles:
+        print("  No vehicles loaded; skipping task seeding")
+        return
+
+    missions = session.query(Mission).order_by(Mission.id).limit(SEED_TASK_MISSIONS).all()
+    statuses = [
+        TaskStatus.TRAVELING,
+        TaskStatus.TRANSPORTING,
+        TaskStatus.PREPARE_UNLOAD,
+        TaskStatus.UNLOAD,
+        TaskStatus.WAIT,
+    ]
+
+    for m in missions:
+        k = rng.randint(SEED_TASK_MIN_VEHICLES, min(SEED_TASK_MAX_VEHICLES, len(vehicles)))
+        chosen = rng.sample(vehicles, k)
+        for v in chosen:
+            session.add(Task(
+                vehicle_id=v.id,
+                mission_id=m.id,
+                status=rng.choice(statuses),
+                start_date=m.available_from,
+                end_date=m.deadline,
+            ))
+        # Reflect the assignment on the mission (first vehicle / its carrier).
+        m.assigned_vehicle_id = chosen[0].id
+        m.assigned_carrier_id = chosen[0].carrier_id
+
+    session.commit()
+    print(f"  Seeded {session.query(Task).count()} tasks across {len(missions)} missions")
+
+
 def load_public_verification(session, csv_path: Path):
     print(f"Loading public verification from {csv_path}...")
     with open(csv_path, encoding="utf-8") as f:
@@ -271,28 +323,27 @@ def load_budget(session, csv_path: Path):
 
 
 def load_all():
-    """Initialize database and load all CSV data."""
-    print("Initializing database...")
-    init_db()
+    """Reset the schema and load all CSV data.
+
+    Drops and recreates every table so the schema always matches the current
+    models (avoids stale-column errors on existing volumes), then reseeds.
+    """
+    # Import all models + the event log so every table is registered before drop.
+    import app.models  # noqa: F401
+    from app.events import MissionEvent  # noqa: F401
+
+    print("Resetting database schema...")
+    Base.metadata.drop_all(bind=engine)
+    init_db()  # create PostGIS extension + all tables fresh
 
     session = SessionLocal()
     try:
-        # Clear existing data (for idempotent reloads)
-        print("Clearing existing data...")
-        session.query(Budget).delete()
-        session.query(CrisisObject).delete()
-        session.query(PublicVerification).delete()
-        session.query(Mission).delete()
-        session.query(Warehouse).delete()
-        session.query(Vehicle).delete()
-        session.query(Carrier).delete()
-        session.commit()
-
         # Load in order (respecting foreign keys)
         load_carriers(session, CSV_DIR / "carriers.csv")
         load_vehicles(session, CSV_DIR / "vehicles.csv")
         load_warehouses(session, CSV_DIR / "warehouses.csv")
         load_missions(session, CSV_DIR / "missions.csv")
+        seed_tasks(session)
         load_public_verification(session, CSV_DIR / "public_verification.csv")
         load_crisis_map(session, CSV_DIR / "crisis_map.csv")
         load_budget(session, CSV_DIR / "budget.csv")
