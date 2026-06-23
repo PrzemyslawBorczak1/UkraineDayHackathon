@@ -270,10 +270,11 @@ def seed_tasks_or_allocate(session):
 
     from app.allocation.pipeline import run_allocation
 
-    iterations = int(os.getenv("ALLOCATE_ITERATIONS", "100"))
-    # ALLOCATE_DAYS unset -> full span (ALL missions, earliest -> latest deadline).
-    days_env = os.getenv("ALLOCATE_DAYS")
-    days = int(days_env) if days_env else None
+    iterations = int(os.getenv("ALLOCATE_ITERATIONS", "5"))
+    # Window length in days (default 1 week). Set ALLOCATE_DAYS=0 -> full span
+    # (ALL missions, earliest -> latest deadline).
+    days_env = os.getenv("ALLOCATE_DAYS", "7")
+    days = int(days_env) if days_env and days_env != "0" else None
     print(f"Running allocation engine over {'ALL missions' if days is None else f'{days} days'} "
           f"(iterations={iterations})...")
     summary = run_allocation(session, iterations=iterations, days=days)
