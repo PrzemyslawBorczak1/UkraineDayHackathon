@@ -11,6 +11,7 @@ from sqlalchemy import text
 from app.database import get_db, init_db
 from app.models import Carrier, Vehicle, Warehouse, Mission, CrisisObject, Budget
 from app.routers import driver, missions, warehouses, carriers, allocation, crisis, recommendations
+from app.carrier_panel.router import router as carrier_panel_router
 
 
 @asynccontextmanager
@@ -42,6 +43,7 @@ app.include_router(allocation.router)
 app.include_router(carriers.router)
 app.include_router(crisis.router)
 app.include_router(recommendations.router)
+app.include_router(carrier_panel_router)
 
 
 @app.exception_handler(StarletteHTTPException)
