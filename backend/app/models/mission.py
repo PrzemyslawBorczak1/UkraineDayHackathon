@@ -30,6 +30,10 @@ class Mission(Base):
     origin_point: Mapped[str] = mapped_column(String(50))
     origin_geom: Mapped[str] = mapped_column(Geometry("POINT", srid=4326))
     origin_address: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    # Origin warehouse the mission departs from (its carrier accepts the mission).
+    origin_warehouse_id: Mapped[Optional[str]] = mapped_column(
+        ForeignKey("warehouses.id"), nullable=True
+    )
     destination_point: Mapped[str] = mapped_column(String(50))
     dest_geom: Mapped[str] = mapped_column(Geometry("POINT", srid=4326))
     dest_address: Mapped[Optional[str]] = mapped_column(Text, nullable=True)

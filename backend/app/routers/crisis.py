@@ -1,7 +1,7 @@
-"""Crisis-map endpoints (coordinator side).
+"""Crisis map endpoints (coordinator side).
 
-List returns the fields the map needs (type, severity, status, coords); the full
-record is returned by the by-id endpoint.
+List returns lean fields for the map/filtering; the by-id endpoint returns the
+full model.
 """
 from fastapi import APIRouter, Depends, HTTPException
 from geoalchemy2.shape import to_shape
@@ -14,32 +14,32 @@ from app.serialize import serialize
 router = APIRouter(prefix="/crisis", tags=["crisis"])
 
 
-def _summary(c: CrisisObject) -> dict:
-    """Lean shape for list/filter/map views."""
-    point = to_shape(c.geom)
+def _summary(o: CrisisObject) -> dict:
+    """Lean shape for list/map/filter views."""
+    point = to_shape(o.geom)
     return {
-        "id": c.id,
-        "object_type": c.object_type,
-        "name": c.name,
-        "city": c.city,
-        "voivodeship": c.voivodeship,
-        "severity": c.severity,
-        "status": c.status,
+        "id": o.id,
+        "object_type": o.object_type,
+        "name": o.name,
+        "city": o.city,
+        "voivodeship": o.voivodeship,
+        "severity": o.severity,
+        "status": o.status,
         "lat": point.y,
         "lng": point.x,
     }
 
 
 @router.get("/")
-def list_crisis(db: Session = Depends(get_db)):
+def list_crisis_objects(db: Session = Depends(get_db)):
     """List crisis-map objects (summary fields only)."""
-    return [_summary(c) for c in db.query(CrisisObject).all()]
+    return [_summary(o) for o in db.query(CrisisObject).all()]
 
 
-@router.get("/{crisis_id}/")
-def get_crisis(crisis_id: str, db: Session = Depends(get_db)):
+@router.get("/{object_id}/")
+def get_crisis_object(object_id: str, db: Session = Depends(get_db)):
     """Full details for a single crisis-map object."""
-    c = db.query(CrisisObject).filter(CrisisObject.id == crisis_id).first()
-    if c is None:
-        raise HTTPException(status_code=404, detail=f"Crisis object {crisis_id} does not exist")
-    return serialize(c)
+    o = db.query(CrisisObject).filter(CrisisObject.id == object_id).first()
+    if o is None:
+        raise HTTPException(status_code=404, detail=f"Crisis object {object_id} does not exist")
+    return serialize(o)
