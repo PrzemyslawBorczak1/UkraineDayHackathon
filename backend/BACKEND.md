@@ -29,10 +29,12 @@ backend/app/
 │   └── budget.py        # Budget
 ├── routers/
 │   ├── driver.py        # flow kierowcy (auth/tasks/incident/vehicle) — /api/v1
-│   ├── missions.py      # tworzenie misji — /api/v1
+│   ├── missions.py      # CRUD/list/animacje misji — /api/v1
 │   ├── warehouses.py    # lista + szczegóły magazynów — /warehouse
+│   ├── carriers.py      # lista + szczegóły przewoźników — /carrier
 │   ├── crisis.py        # lista + szczegóły obiektów crisis-map — /crisis
-│   └── allocation.py    # uruchomienie alokacji — /api/v1
+│   ├── allocation.py    # uruchomienie alokacji — /api/v1
+│   └── recommendations.py # proxy do serwisu LLM (rekomendacje misji) — /api/v1
 ├── events/
 │   ├── types.py         # EventType (driver/carrier/coordinator/system)
 │   ├── mission_event.py # MissionEvent (append-only log)
@@ -99,6 +101,17 @@ Koordynator:
 - `GET /warehouse/{warehouseId}/` - pełny model magazynu
 - `GET /crisis/` - lista obiektów crisis-map (summary + lat/lng)
 - `GET /crisis/{objectId}/` - pełny model obiektu crisis-map
+- `GET /carrier/` - lista przewoźników, `GET /carrier/{carrierId}/` - pełny model
+- `POST /api/v1/recommendations` - buduje payload (magazyny + punkty kryzysowe)
+  i woła serwis LLM `recomendations/` (`/rekomenduj-misje`), zwraca rekomendowane misje
+
+### Serwis rekomendacji (chatbot/LLM)
+
+Osobny kontener `recommendations` (`recomendations/main.py`, OpenAI gpt-4o) na
+porcie 8001. Backend woła go pod `RECOMMENDATIONS_URL` (domyślnie
+`http://recommendations:8001`). **Wymaga `OPENAI_API_KEY`** — ustaw w `.env`
+obok `docker-compose.yml` (compose interpoluje `${OPENAI_API_KEY}`); bez klucza
+kontener `recommendations` nie wstanie, ale reszta systemu działa (backend zwróci 502).
 - `POST /api/v1/allocate?day=YYYY-MM-DD&iterations=2` - uruchamia alokację na dany
   dzień, zapisuje harmonogram jako Taski (idempotentnie), zwraca summary
 

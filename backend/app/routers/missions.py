@@ -15,7 +15,7 @@ from geoalchemy2.shape import from_shape, to_shape
 from sqlalchemy.orm import Session
 
 from app.database import get_db
-from app.models import Mission, Warehouse
+from app.models import Mission, Warehouse, Carrier, Vehicle, Task
 from app.models.mission import MissionStatus
 from app.load import parse_requirements
 from app.serialize import serialize

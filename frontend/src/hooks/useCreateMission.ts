@@ -4,9 +4,7 @@ import { api } from "../lib/api";
 /** Fields sent to POST /api/v1/missions — matches MissionCreate on the backend. */
 export type MissionCreatePayload = {
   cargo_type: string;
-  origin_point: string;
-  origin_lat: number;
-  origin_lng: number;
+  origin_warehouse_id: string;
   destination_point: string;
   dest_lat: number;
   dest_lng: number;
