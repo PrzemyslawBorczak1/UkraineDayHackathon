@@ -1,7 +1,7 @@
 import { memo } from "react";
 import { Chip, Input, NavItem, SectionLabel, cx } from "../ui";
 import { NAV_ENTRIES } from "../../data/dispatch";
-import type { MissionListItem, WarehouseSummary } from "../../types";
+import type { CrisisSummary, MissionListItem, WarehouseSummary } from "../../types";
 import {
   FACETS,
   availableOptions,
@@ -13,6 +13,12 @@ import {
   type MissionFacetKey,
   type MissionFilters,
 } from "../../lib/missions";
+import {
+  CRISIS_FACETS,
+  crisisOptions,
+  type CrisisFacetKey,
+  type CrisisFilters,
+} from "../../lib/crisis";
 
 // ── Cards ───────────────────────────────────────────────────────────────────
 
@@ -93,7 +99,73 @@ const WarehouseCard = memo(function WarehouseCard({
   );
 });
 
+/** A crisis-point row, with a red severity dot. */
+const CrisisCard = memo(function CrisisCard({
+  crisis,
+  active,
+  onClick,
+}: {
+  crisis: CrisisSummary;
+  active?: boolean;
+  onClick?: () => void;
+}) {
+  return (
+    <button
+      onClick={onClick}
+      className={cx(
+        "w-full text-left rounded-lg px-4 py-3 transition-colors",
+        active ? "bg-neutral-900 text-white" : "hover:bg-neutral-100"
+      )}
+    >
+      <div className="flex items-center justify-between gap-2">
+        <span className="flex items-center gap-2 min-w-0">
+          <span className="size-2.5 shrink-0 rounded-full bg-red-600" />
+          <span className="text-sm font-semibold truncate">{crisis.name}</span>
+        </span>
+        <span className={cx("text-[10px] tracking-widest shrink-0", active ? "text-white/60" : "text-neutral-400")}>
+          {crisis.severity.toUpperCase()}
+        </span>
+      </div>
+      <div className={cx("mt-1 text-[11px] truncate", active ? "text-white/70" : "text-neutral-500")}>
+        {crisis.object_type} · {crisis.city} · {crisis.status}
+      </div>
+    </button>
+  );
+});
+
 // ── Filter panels ────────────────────────────────────────────────────────────
+
+/** Crisis facet filters — each chip row only shows values that still match. */
+function CrisisFilterPanel({
+  objects,
+  filters,
+  onToggle,
+}: {
+  objects: CrisisSummary[];
+  filters: CrisisFilters;
+  onToggle: (facet: CrisisFacetKey, value: string) => void;
+}) {
+  return (
+    <>
+      {CRISIS_FACETS.map(({ key, label }) => {
+        const options = crisisOptions(objects, filters, key);
+        if (options.length === 0) return null;
+        return (
+          <div key={key} className="space-y-2">
+            <SectionLabel>{label}</SectionLabel>
+            <div className="flex flex-wrap gap-1.5">
+              {options.map((o) => (
+                <Chip key={o} on={filters[key].has(o)} onClick={() => onToggle(key, o)}>
+                  {o}
+                </Chip>
+              ))}
+            </div>
+          </div>
+        );
+      })}
+    </>
+  );
+}
 
 /** Carrier + cargo filters for missions; each chip row only shows valid values. */
 function MissionFilterPanel({
@@ -184,6 +256,16 @@ type LeftSidebarProps = {
   missionCarrierColors: Map<string, string>;
   selectedMissionId: string | null;
   onSelectMission: (id: string) => void;
+
+  // Crisis view
+  crisis: CrisisSummary[];
+  crisisLoading: boolean;
+  crisisError: string | null;
+  crisisFilters: CrisisFilters;
+  onToggleCrisisFilter: (facet: CrisisFacetKey, value: string) => void;
+  filteredCrisis: CrisisSummary[];
+  selectedCrisisId: string | null;
+  onSelectCrisis: (id: string) => void;
 };
 
 /** Left rail: brand, navigation, search and the per-view filters + results. */
@@ -208,8 +290,17 @@ export function LeftSidebar({
   missionCarrierColors,
   selectedMissionId,
   onSelectMission,
+  crisis,
+  crisisLoading,
+  crisisError,
+  crisisFilters,
+  onToggleCrisisFilter,
+  filteredCrisis,
+  selectedCrisisId,
+  onSelectCrisis,
 }: LeftSidebarProps) {
   const isWarehouses = activeNav === "warehouses";
+  const isCrisis = activeNav === "crisis";
 
   return (
     <div className="flex flex-col h-full">
@@ -237,6 +328,8 @@ export function LeftSidebar({
                 ? warehouses.length || n.count
                 : n.id === "tasks"
                 ? missions.length || n.count
+                : n.id === "crisis"
+                ? crisis.length || n.count
                 : n.count
             }
             onClick={() => onNavChange(n.id)}
@@ -248,13 +341,19 @@ export function LeftSidebar({
 
       {/* Search */}
       <div className="px-4 pt-4">
-        <Input placeholder={isWarehouses ? "Search warehouses…" : "Search missions…"} />
+        <Input
+          placeholder={
+            isWarehouses ? "Search warehouses…" : isCrisis ? "Search crisis points…" : "Search missions…"
+          }
+        />
       </div>
 
       {/* Filters */}
       <div className="px-4 pt-5 space-y-4">
         {isWarehouses ? (
           <WarehouseFilterPanel warehouses={warehouses} filters={filters} onToggle={onToggleFilter} />
+        ) : isCrisis ? (
+          <CrisisFilterPanel objects={crisis} filters={crisisFilters} onToggle={onToggleCrisisFilter} />
         ) : (
           <MissionFilterPanel missions={missions} filters={missionFilters} onToggle={onToggleMissionFilter} />
         )}
@@ -264,7 +363,7 @@ export function LeftSidebar({
       <div className="px-4 pt-5 pb-2 flex items-center justify-between">
         <SectionLabel>Results</SectionLabel>
         <span className="text-[10px] tabular-nums text-neutral-400">
-          {isWarehouses ? filteredWarehouses.length : filteredMissions.length}
+          {isWarehouses ? filteredWarehouses.length : isCrisis ? filteredCrisis.length : filteredMissions.length}
         </span>
       </div>
       <div className="flex-1 overflow-y-auto px-2 pb-4 space-y-0.5">
@@ -283,6 +382,23 @@ export function LeftSidebar({
                 color={warehouseCarrierColors.get(w.carrier_id) ?? "#525252"}
                 active={selectedWarehouseId === w.id}
                 onClick={() => onSelectWarehouse(w.id)}
+              />
+            ))
+          )
+        ) : isCrisis ? (
+          crisisLoading ? (
+            <p className="px-4 py-3 text-[11px] text-neutral-400">Loading crisis points…</p>
+          ) : crisisError ? (
+            <p className="px-4 py-3 text-[11px] text-rose-500">{crisisError}</p>
+          ) : filteredCrisis.length === 0 ? (
+            <p className="px-4 py-3 text-[11px] text-neutral-400">No crisis points match the filters.</p>
+          ) : (
+            filteredCrisis.map((c) => (
+              <CrisisCard
+                key={c.id}
+                crisis={c}
+                active={selectedCrisisId === c.id}
+                onClick={() => onSelectCrisis(c.id)}
               />
             ))
           )

@@ -4,6 +4,7 @@ import { DispatchShell } from "../components/layout/DispatchShell";
 import { MissionMap } from "../components/map/MissionMap";
 import { WarehouseLayer } from "../components/map/WarehouseLayer";
 import { MissionTimelineLayer } from "../components/map/MissionTimelineLayer";
+import { CrisisLayer } from "../components/map/CrisisLayer";
 import { TimelineBar } from "../components/timeline/TimelineBar";
 import { LeftSidebar } from "../components/sidebar/LeftSidebar";
 import { RightSidebar } from "../components/sidebar/RightSidebar";
@@ -11,6 +12,7 @@ import { NAV_ENTRIES } from "../data/dispatch";
 import { useWarehouses } from "../hooks/useWarehouses";
 import { useMissions } from "../hooks/useMissions";
 import { useMissionAnimations } from "../hooks/useMissionAnimations";
+import { useCrisis } from "../hooks/useCrisis";
 import {
   applyFilters,
   buildCarrierColors,
@@ -22,6 +24,11 @@ import {
   emptyMissionFilters,
   type MissionFacetKey,
 } from "../lib/missions";
+import {
+  applyCrisisFilters,
+  emptyCrisisFilters,
+  type CrisisFacetKey,
+} from "../lib/crisis";
 import { progressOf } from "../lib/geo";
 
 // Wall-clock seconds it takes to play the whole timeline window start → end.
@@ -73,6 +80,21 @@ export function DispatchPage({ onNewMission }: { onNewMission: () => void }) {
     [missions, missionFilters]
   );
   const missionCarrierColors = useMemo(() => buildCarrierColors(missions), [missions]);
+
+  // ── Crisis ──
+  const { data: crisis, loading: crLoading, error: crError } = useCrisis();
+  const [crisisFilters, setCrisisFilters] = useState(emptyCrisisFilters);
+  const [selectedCrisisId, setSelectedCrisisId] = useState<string | null>(null);
+
+  const toggleCrisisFilter = (facet: CrisisFacetKey, value: string) =>
+    setCrisisFilters((prev) => {
+      const next = new Set(prev[facet]);
+      if (next.has(value)) next.delete(value);
+      else next.add(value);
+      return { ...prev, [facet]: next };
+    });
+
+  const filteredCrisis = useMemo(() => applyCrisisFilters(crisis, crisisFilters), [crisis, crisisFilters]);
 
   // Only animate missions that pass the current filters.
   const visibleAnimations = useMemo(() => {
@@ -132,6 +154,7 @@ export function DispatchPage({ onNewMission }: { onNewMission: () => void }) {
 
   const showWarehouses = activeNav === "warehouses";
   const showMissions = activeNav === "tasks";
+  const showCrisis = activeNav === "crisis";
   const selectedWhCarrierId = warehouses.find((w) => w.id === selectedWarehouseId)?.carrier_id;
 
   // Selected mission detail for the right rail (progress vs. the shared cursor).
@@ -168,6 +191,14 @@ export function DispatchPage({ onNewMission }: { onNewMission: () => void }) {
           missionCarrierColors={missionCarrierColors}
           selectedMissionId={selectedMissionId}
           onSelectMission={setSelectedMissionId}
+          crisis={crisis}
+          crisisLoading={crLoading}
+          crisisError={crError}
+          crisisFilters={crisisFilters}
+          onToggleCrisisFilter={toggleCrisisFilter}
+          filteredCrisis={filteredCrisis}
+          selectedCrisisId={selectedCrisisId}
+          onSelectCrisis={setSelectedCrisisId}
         />
       }
       right={
@@ -199,6 +230,13 @@ export function DispatchPage({ onNewMission }: { onNewMission: () => void }) {
               colors={missionCarrierColors}
               selectedId={selectedMissionId}
               onSelect={setSelectedMissionId}
+            />
+          )}
+          {showCrisis && (
+            <CrisisLayer
+              objects={filteredCrisis}
+              selectedId={selectedCrisisId}
+              onSelect={setSelectedCrisisId}
             />
           )}
         </MissionMap>
