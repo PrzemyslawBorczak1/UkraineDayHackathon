@@ -146,6 +146,39 @@ export type MissionAnimation = {
   vehicles: MissionVehicleTrack[];
 };
 
+// --- Mission propositions (LLM recommendations) ----------------------------
+
+/** One recommended mission returned by POST /api/v1/recommendations. */
+export type MissionProposition = {
+  origin_id: string;       // Warehouse ID
+  destination_id: string;  // Crisis-map object ID
+  proponowany_typ_ladunku: string;
+  wymagany_typ_pojazdu: string;
+  priorytet: string;
+  szacowany_dystans_km: number;
+  uzasadnienie: string;
+};
+
+/** A proposition enriched with resolved origin/destination display names. */
+export type MissionPropositionView = {
+  proposition: MissionProposition;
+  originName: string;
+  destName: string;
+};
+
+/** Prefill passed into the New Mission form when a proposition is chosen. */
+export type MissionPrefill = {
+  cargo_type?: string;
+  origin_warehouse_id?: string;
+  destination_point?: string;
+  dest_lat?: string;
+  dest_lng?: string;
+  route_distance_km?: string;
+  required_vehicle_type?: string;
+  priority?: string;
+  special_requirement?: string;
+};
+
 // --- Crisis map ------------------------------------------------------------
 
 /** Lean crisis-map object returned by GET /crisis/ (summary + coordinates). */

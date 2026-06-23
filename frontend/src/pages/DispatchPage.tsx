@@ -13,6 +13,8 @@ import { useWarehouses } from "../hooks/useWarehouses";
 import { useMissions } from "../hooks/useMissions";
 import { useMissionAnimations } from "../hooks/useMissionAnimations";
 import { useCrisis } from "../hooks/useCrisis";
+import { useRecommendations } from "../hooks/useRecommendations";
+import type { MissionPrefill, MissionProposition, MissionPropositionView } from "../types";
 import {
   applyFilters,
   buildCarrierColors,
@@ -46,7 +48,7 @@ export function DispatchPage({
   onNewMission,
   onSummary,
 }: {
-  onNewMission: () => void;
+  onNewMission: (prefill?: MissionPrefill) => void;
   onSummary: () => void;
 }) {
   const [activeNav, setActiveNav] = useState(NAV_ENTRIES[0]?.id);
@@ -101,6 +103,45 @@ export function DispatchPage({
     });
 
   const filteredCrisis = useMemo(() => applyCrisisFilters(crisis, crisisFilters), [crisis, crisisFilters]);
+
+  // ── Mission propositions (LLM) ──
+  const recommendations = useRecommendations();
+  const showPropositions = activeNav === "propositions";
+
+  // Lazily fetch propositions the first time the view is opened.
+  useEffect(() => {
+    if (showPropositions && !recommendations.loaded && !recommendations.loading) {
+      recommendations.fetch();
+    }
+  }, [showPropositions, recommendations]);
+
+  // Resolve origin/destination names for display.
+  const propositionViews = useMemo<MissionPropositionView[]>(
+    () =>
+      recommendations.data.map((p) => ({
+        proposition: p,
+        originName: warehouses.find((w) => w.id === p.origin_id)?.name ?? p.origin_id,
+        destName: crisis.find((c) => c.id === p.destination_id)?.name ?? p.destination_id,
+      })),
+    [recommendations.data, warehouses, crisis]
+  );
+
+  // Open the New Mission form prefilled from a chosen proposition.
+  const handleSelectProposition = (p: MissionProposition) => {
+    const wh = warehouses.find((w) => w.id === p.origin_id);
+    const cr = crisis.find((c) => c.id === p.destination_id);
+    onNewMission({
+      cargo_type: p.proponowany_typ_ladunku,
+      origin_warehouse_id: wh?.id ?? "",
+      destination_point: cr?.name ?? p.destination_id,
+      dest_lat: cr ? String(cr.lat) : "",
+      dest_lng: cr ? String(cr.lng) : "",
+      route_distance_km: String(Math.round(p.szacowany_dystans_km)),
+      required_vehicle_type: p.wymagany_typ_pojazdu,
+      priority: p.priorytet,
+      special_requirement: p.uzasadnienie,
+    });
+  };
 
   // Only animate missions that pass the current filters.
   const visibleAnimations = useMemo(() => {
@@ -205,6 +246,7 @@ export function DispatchPage({
           filteredCrisis={filteredCrisis}
           selectedCrisisId={selectedCrisisId}
           onSelectCrisis={setSelectedCrisisId}
+          propositionsCount={recommendations.data.length}
         />
       }
       right={
@@ -215,6 +257,11 @@ export function DispatchPage({
           missionProgress={selectedProgress}
           missionCursor={cursor ?? undefined}
           missionColor={selectedMissionColor}
+          propositions={showPropositions ? propositionViews : null}
+          propositionsLoading={recommendations.loading}
+          propositionsError={recommendations.error}
+          onRefreshPropositions={recommendations.fetch}
+          onSelectProposition={handleSelectProposition}
         />
       }
     >
