@@ -76,6 +76,10 @@ mission for now.
   {
     "id": 1,
     "mission_id": "M0001",
+    "vehicle_id": "V0004",
+    "vehicle_type": "Refrigerated semi",
+    "carrier_id": "C012",
+    "carrier_name": "Trans-Pol Logistics",
     "cargo_type": "Food",
     "start_time": "2026-06-22T16:00:00Z",
     "end_time": "2026-06-22T22:00:00Z",

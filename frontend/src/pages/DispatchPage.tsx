@@ -11,6 +11,7 @@ import { RightSidebar } from "../components/sidebar/RightSidebar";
 import { NAV_ENTRIES } from "../data/dispatch";
 import { useWarehouses } from "../hooks/useWarehouses";
 import { useMissions } from "../hooks/useMissions";
+import { useCarriers } from "../hooks/useCarriers";
 import { useMissionAnimations } from "../hooks/useMissionAnimations";
 import { useCrisis } from "../hooks/useCrisis";
 import { useRecommendations } from "../hooks/useRecommendations";
@@ -67,7 +68,17 @@ export function DispatchPage({
     });
 
   const filteredWarehouses = useMemo(() => applyFilters(warehouses, filters), [warehouses, filters]);
-  const warehouseCarrierColors = useMemo(() => buildCarrierColors(warehouses), [warehouses]);
+
+  // One stable carrier→color map from the FULL carrier list, shared by
+  // warehouses, missions and the vehicles driving them — so every carrier_id
+  // (incl. vehicles whose carrier isn't the mission's first carrier) resolves
+  // to the same color everywhere.
+  const { data: carriers } = useCarriers();
+  const carrierColors = useMemo(
+    () => buildCarrierColors(carriers.map((c) => ({ carrier_id: c.id }))),
+    [carriers]
+  );
+  const warehouseCarrierColors = carrierColors;
 
   // ── Missions ──
   const { data: missions, loading: msLoading, error: msError } = useMissions();
@@ -87,7 +98,7 @@ export function DispatchPage({
     () => applyMissionFilters(missions, missionFilters),
     [missions, missionFilters]
   );
-  const missionCarrierColors = useMemo(() => buildCarrierColors(missions), [missions]);
+  const missionCarrierColors = carrierColors;
 
   // ── Crisis ──
   const { data: crisis, loading: crLoading, error: crError } = useCrisis();

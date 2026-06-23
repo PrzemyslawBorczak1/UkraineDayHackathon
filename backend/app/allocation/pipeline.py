@@ -151,7 +151,12 @@ def _build_missions(db: Session, window_start: datetime, window_end: datetime) -
     missions = []
     for m in rows:
         af, dl = _naive(m.available_from), _naive(m.deadline)
-        if af is None or dl is None or af >= window_end or dl < window_start:
+        if af is None or dl is None:
+            continue
+        # Keep only missions whose [available_from, deadline] OVERLAPS the window
+        # [window_start, window_end): drop those ending before it (dl < start) or
+        # starting after it (af >= end).
+        if dl < window_start or af >= window_end:
             continue
         temp = None
         if m.required_temperature:
@@ -183,25 +188,40 @@ def _daily_budget(db: Session) -> EBudget:
     )
 
 
-def run_allocation(db: Session, day: Optional[date] = None, iterations: int = 2) -> dict:
-    """Run allocation for one day and persist the schedule as Tasks.
+def run_allocation(
+    db: Session, day: Optional[date] = None, iterations: int = 2,
+    days: Optional[int] = None,
+) -> dict:
+    """Run allocation and persist the schedule as Tasks.
 
-    `day` defaults to the earliest available_from among allocatable missions.
-    Returns a summary dict.
+    `day` defaults to **today (now)** — only missions relevant in
+    `[now, now + days]` are fed to the engine (historical/expired ones are
+    dropped). `days` is the window length; **None = from now to the latest
+    deadline**. More `iterations` / a wider window = better (and slower)
+    schedule. Returns a summary dict.
     """
-    if day is None:
-        earliest = (
-            db.query(func.min(Mission.available_from))
-            .filter(Mission.status.in_(_ALLOCATABLE))
-            .scalar()
-        )
-        if earliest is None:
-            return {"day": None, "tasks_created": 0, "missions_considered": 0,
-                    "missions_assigned": 0, "vehicles_used": 0}
-        day = _naive(earliest).date()
+    bounds = (
+        db.query(func.min(Mission.available_from), func.max(Mission.deadline))
+        .filter(Mission.status.in_(_ALLOCATABLE))
+        .one()
+    )
+    earliest, latest = bounds
+    if earliest is None:
+        return {"day": None, "days": days, "iterations": iterations,
+                "tasks_created": 0, "missions_considered": 0,
+                "missions_assigned": 0, "vehicles_used": 0}
 
+    # Default window starts at *now* (CEST naive frame, matching mission times):
+    # we only schedule missions relevant in [now, now + days], not historical ones.
+    now = _naive(datetime.now(timezone.utc))
+    if day is None:
+        day = now.date()
     window_start = datetime.combine(day, time(0, 0))
-    window_end = window_start + timedelta(days=1)
+    if days is None:
+        # Full span from the window start to the latest deadline.
+        window_end = max(_naive(latest), window_start) + timedelta(days=1)
+    else:
+        window_end = window_start + timedelta(days=max(1, days))
 
     ecarriers, do_not_use = _build_carriers(db)
     vehicles = _build_vehicles(db, ecarriers, do_not_use)
@@ -217,13 +237,33 @@ def run_allocation(db: Session, day: Optional[date] = None, iterations: int = 2)
     )
 
     tasks = persist_schedule(db, vehicles)
+    _reflect_assignment_on_missions(db, tasks)
 
     assigned = {t.mission_id for t in tasks}
     used = {t.vehicle_id for t in tasks}
     return {
         "day": day.isoformat(),
+        "days": days,
+        "iterations": iterations,
         "tasks_created": len(tasks),
         "missions_considered": len(missions),
         "missions_assigned": len(assigned),
         "vehicles_used": len(used),
     }
+
+
+def _reflect_assignment_on_missions(db: Session, tasks) -> None:
+    """Fill mission.assigned_vehicle/carrier and flip status to IN_PROGRESS so the
+    coordinator map shows real carriers + convoys."""
+    veh_carrier = dict(db.query(Vehicle.id, Vehicle.carrier_id).all())
+    seen: set[str] = set()
+    for t in tasks:
+        if t.mission_id in seen:
+            continue
+        seen.add(t.mission_id)
+        m = db.query(Mission).filter(Mission.id == t.mission_id).first()
+        if m is not None:
+            m.assigned_vehicle_id = t.vehicle_id
+            m.assigned_carrier_id = veh_carrier.get(t.vehicle_id)
+            m.status = MissionStatus.IN_PROGRESS
+    db.commit()

@@ -76,6 +76,24 @@ export type TimeWindow = {
   end: Date;
 };
 
+// --- Carriers --------------------------------------------------------------
+
+/** Lean carrier shape returned by GET /carrier/ (summary + coordinates). */
+export type CarrierSummary = {
+  id: string;
+  name: string;
+  hq_city: string;
+  voivodeship: string;
+  operating_region: string;
+  activity_type: string;
+  declared_fleet_size: number;
+  reliability_score: number;
+  risk_rating: string;
+  crisis_participation_status: string;
+  lat: number;
+  lng: number;
+};
+
 // --- Warehouses ------------------------------------------------------------
 
 /** Lean warehouse shape returned by GET /warehouse/ (summary + coordinates). */

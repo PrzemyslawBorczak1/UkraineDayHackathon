@@ -12,7 +12,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import JSONResponse
 from geoalchemy2.shape import to_shape
 from pydantic import BaseModel
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload
 
 from app.database import get_db
 from app.models import Vehicle, Mission, Task
@@ -76,12 +76,18 @@ def _point(geom) -> Optional[dict]:
 def _task_payload(task: Task) -> dict:
     """Task shaped for the driver app. Weight/volume/times come from the task's
     own interval (allocated cargo + time window); origin/destination/cargo_type
-    from the parent mission."""
+    from the parent mission; vehicle + carrier from task.vehicle.carrier."""
     m = task.mission
+    v = task.vehicle
+    carrier = v.carrier if v is not None else None
     special = [m.special_requirement] if m.special_requirement else []
     return {
         "id": task.id,
         "mission_id": m.id,
+        "vehicle_id": task.vehicle_id,
+        "vehicle_type": v.vehicle_type if v is not None else None,
+        "carrier_id": v.carrier_id if v is not None else None,
+        "carrier_name": carrier.name if carrier is not None else None,
         "cargo_type": m.cargo_type,
         "start_time": _iso_z(task.start_date or m.available_from),
         "end_time": _iso_z(task.end_date or m.deadline),
@@ -145,8 +151,16 @@ def get_vehicle(vehicle_id: str, db: Session = Depends(get_db)):
 # --------------------------------------------------------------------------- #
 @router.get("/vehicles/{vehicle_id}/tasks")
 def get_vehicle_tasks(vehicle_id: str, db: Session = Depends(get_db)):
-    """Retrieve all tasks assigned to a vehicle."""
-    tasks = db.query(Task).filter(Task.vehicle_id == vehicle_id).all()
+    """Retrieve all tasks assigned to a vehicle (with mission + vehicle/carrier)."""
+    tasks = (
+        db.query(Task)
+        .filter(Task.vehicle_id == vehicle_id)
+        .options(
+            joinedload(Task.mission),
+            joinedload(Task.vehicle).joinedload(Vehicle.carrier),
+        )
+        .all()
+    )
     return [_task_payload(t) for t in tasks]
 
 
