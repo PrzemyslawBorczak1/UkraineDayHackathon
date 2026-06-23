@@ -9,14 +9,15 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-app = FastAPI(title="System Rekomendacji Misji - Sztab Kryzysowy")
+app = FastAPI(title="Mission Recommendation System - Crisis Command Center")
 client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 
 # ==========================================
-# FUNKCJE POMOCNICZE
+# HELPER FUNCTIONS
 # ==========================================
 
-def oblicz_dystans(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
+def calculate_distance(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
+    """Calculates straight-line distance (in km) using the Haversine formula."""
     R = 6371.0
     lat1_rad, lon1_rad = math.radians(lat1), math.radians(lon1)
     lat2_rad, lon2_rad = math.radians(lat2), math.radians(lon2)
@@ -29,103 +30,104 @@ def oblicz_dystans(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
     return round(R * c, 2)
 
 # ==========================================
-# MODELE DANYCH (Zgodne w 100% z data_dictionary.csv)
+# INPUT DATA MODELS (Mapped to data_dictionary.csv)
 # ==========================================
 
-class Magazyn(BaseModel):
+class Warehouse(BaseModel):
     id: str = Field(alias="Warehouse ID")
-    nazwa: str = Field(alias="Warehouse Name")
-    miasto: str = Field(alias="City")
+    name: str = Field(alias="Warehouse Name")
+    city: str = Field(alias="City")
     latitude: float = Field(alias="Latitude")
     longitude: float = Field(alias="Longitude")
-    warehouse_type: str = Field(alias="Warehouse Type") # np. Emergency hub, Cold storage
+    warehouse_type: str = Field(alias="Warehouse Type") # e.g., Emergency hub, Cold storage
     cold_storage: str = Field(alias="Cold Storage") # Yes/No
     availability_status: str = Field(alias="Availability Status")
     available_capacity_pct: int = Field(alias="Available Capacity (%)")
 
-class PunktOdbioru(BaseModel):
+class MapObject(BaseModel):
     id: str = Field(alias="Map Object ID")
-    nazwa: str = Field(alias="Name")
-    miasto: str = Field(alias="City")
+    name: str = Field(alias="Name")
+    city: str = Field(alias="City")
     latitude: float = Field(alias="Latitude")
     longitude: float = Field(alias="Longitude")
-    object_type: str = Field(alias="Object Type") # np. Crisis hub, Collection point
+    object_type: str = Field(alias="Object Type") # e.g., Crisis hub, Collection point
     severity: str = Field(alias="Severity") # Operational / Medium / Critical
     status: str = Field(alias="Status") # Active / Monitoring / Escalating
-    operational_note: str = Field(alias="Operational Note", description="Kontekst dla planistów")
+    operational_note: str = Field(alias="Operational Note", description="Context for planners")
 
-class ZapotrzebowaniePayload(BaseModel):
-    magazyny: List[Magazyn]
-    punkty_odbioru: List[PunktOdbioru]
+class CrisisPayload(BaseModel):
+    warehouses: List[Warehouse]
+    map_objects: List[MapObject]
 
 # ==========================================
-# MODELE DANYCH (Wyjście z LLM)
+# OUTPUT DATA MODELS (LLM Output)
 # ==========================================
 
-class RekomendowanaMisja(BaseModel):
+class RecommendedMission(BaseModel):
     origin_id: str
     destination_id: str
-    proponowany_typ_ladunku: str = Field(description="Wywnioskowany przez LLM typ ładunku")
-    wymagany_typ_pojazdu: str = Field(description="Van, Rigid truck, Standard semi, Refrigerated semi, BDF swap body")
-    priorytet: str = Field(description="Critical, High, Medium, Low")
-    szacowany_dystans_km: float
-    uzasadnienie: str
+    proposed_cargo_type: str = Field(description="Cargo type deduced by LLM")
+    required_vehicle_type: str = Field(description="Van, Rigid truck, Standard semi, Refrigerated semi, BDF swap body")
+    priority: str = Field(description="Critical, High, Medium, Low")
+    estimated_distance_km: float
+    justification: str
 
-class OdpowiedzRekomendacji(BaseModel):
-    misje: List[RekomendowanaMisja]
+class RecommendationResponse(BaseModel):
+    missions: List[RecommendedMission]
 
 # ==========================================
-# LOGIKA LLM I ENDPOINTY
+# LLM LOGIC & ENDPOINTS
 # ==========================================
 
-def generuj_rekomendacje_llm(payload: ZapotrzebowaniePayload) -> OdpowiedzRekomendacji:
+def generate_llm_recommendations(payload: CrisisPayload) -> RecommendationResponse:
     
-    dane_dla_llm = {
-        "magazyny": [m.dict(by_alias=True) for m in payload.magazyny],
-        "punkty_odbioru": [p.dict(by_alias=True) for p in payload.punkty_odbioru],
-        "dostepne_trasy": []
+    llm_data = {
+        "warehouses": [w.dict(by_alias=True) for w in payload.warehouses],
+        "map_objects": [m.dict(by_alias=True) for m in payload.map_objects],
+        "available_routes": []
     }
 
-    for magazyn in payload.magazyny:
-        for punkt in payload.punkty_odbioru:
-            dystans = oblicz_dystans(
-                magazyn.latitude, magazyn.longitude,
-                punkt.latitude, punkt.longitude
+    # Calculate distance matrix
+    for warehouse in payload.warehouses:
+        for map_obj in payload.map_objects:
+            distance = calculate_distance(
+                warehouse.latitude, warehouse.longitude,
+                map_obj.latitude, map_obj.longitude
             )
-            dane_dla_llm["dostepne_trasy"].append({
-                "magazyn_id": magazyn.id,
-                "punkt_id": punkt.id,
-                "odleglosc_km": dystans
+            llm_data["available_routes"].append({
+                "warehouse_id": warehouse.id,
+                "map_object_id": map_obj.id,
+                "distance_km": distance
             })
 
-    prompt_systemowy = """
-    Jesteś Głównym Planistą Logistyki w sztabie kryzysowym. Tworzysz rekomendacje misji (Missions).
-    Nie posiadasz list konkretnych towarów. Musisz wykazać się dedukcją.
+    system_prompt = """
+    You are the Chief Logistics Planner in a crisis command center. You create mission recommendations (Missions).
+    You do not have strict lists of specific goods. You must use deduction based on facility types and notes.
     
-    ZASADY:
-    1. Przeanalizuj 'Object Type' oraz 'Operational Note' z punktów odbioru (Crisis Map), aby ZROZUMIEĆ, czego mogą potrzebować.
-    2. Dopasuj to zapotrzebowanie do odpowiedniego 'Warehouse Type' i parametru 'Cold Storage'. Np. jeśli punkt potrzebuje szczepionek, przypisz mu magazyn z 'Cold Storage: Yes'.
-    3. Ignoruj magazyny, których 'Availability Status' to "Reserved for mission" lub "Unavailable". Bierz pod uwagę tylko te dostępne i posiadające wolną pojemność.
-    4. Minimalizuj 'odleglosc_km'. Wybieraj najbliższy sensowny magazyn dla danego punktu.
-    5. Na podstawie dedukcji zaproponuj logiczny 'proponowany_typ_ladunku' (np. "Środki medyczne", "Sprzęt ratunkowy", "Żywność", "Paliwo").
-    6. Zaproponuj adekwatny 'wymagany_typ_pojazdu' z listy: Van, Rigid truck, Standard semi, Refrigerated semi, BDF swap body. Jeśli to ładunek chłodniczy, użyj Refrigerated semi.
-    7. Ustal priorytet (Critical/High/Medium/Low) na podstawie pola 'Severity' i 'Status' punktu kryzysowego.
+    RULES:
+    1. Analyze 'Object Type' and 'Operational Note' from the delivery points (Crisis Map) to UNDERSTAND what they might need.
+    2. Match this demand to the appropriate 'Warehouse Type' and 'Cold Storage' parameter. E.g., if a point needs vaccines, assign it a warehouse with 'Cold Storage: Yes'.
+    3. Ignore warehouses where 'Availability Status' is "Reserved for mission" or "Unavailable". Only consider available ones with free capacity.
+    4. Minimize 'distance_km'. Choose the closest reasonable warehouse for a given point.
+    5. Based on deduction, propose a logical 'proposed_cargo_type' (e.g., "Medical supplies", "Rescue equipment", "Food", "Fuel").
+    6. Propose an adequate 'required_vehicle_type' from the list: Van, Rigid truck, Standard semi, Refrigerated semi, BDF swap body. If it's cold cargo, use Refrigerated semi.
+    7. Set the priority (Critical/High/Medium/Low) based on the 'Severity' and 'Status' fields of the crisis point.
     
-    Zwróć odpowiedź WYŁĄCZNIE w tym formacie JSON:
+    Return the response EXCLUSIVELY in this JSON format:
     {
-      "misje": [
+      "missions": [
         {
           "origin_id": "Warehouse ID",
           "destination_id": "Map Object ID",
-          "proponowany_typ_ladunku": "np. Środki medyczne i koce",
-          "wymagany_typ_pojazdu": "np. Refrigerated semi",
-          "priorytet": "Critical",
-          "szacowany_dystans_km": 15.5,
-          "uzasadnienie": "Punkt wymaga natychmiastowej pomocy medycznej (Status: Escalating). Wybrano najbliższy magazyn typu Cold storage z dostępnością (15.5 km)."
+          "proposed_cargo_type": "e.g., Medical supplies and blankets",
+          "required_vehicle_type": "e.g., Refrigerated semi",
+          "priority": "Critical",
+          "estimated_distance_km": 15.5,
+          "justification": "The point requires immediate medical assistance (Status: Escalating). The closest available Cold storage warehouse was selected (15.5 km)."
         }
       ]
     }
-    Nigdy nie zwracaj pustej listy, stwórz najlepsze możliwe rekomendacje opierając się na typach placówek.
+    Never return an empty list; create the best possible recommendations based on facility types.
     """
 
     try:
@@ -133,20 +135,25 @@ def generuj_rekomendacje_llm(payload: ZapotrzebowaniePayload) -> OdpowiedzRekome
             model="gpt-4o",
             response_format={ "type": "json_object" },
             messages=[
-                {"role": "system", "content": prompt_systemowy},
-                {"role": "user", "content": f"Wygeneruj misje na podstawie tych danych: {json.dumps(dane_dla_llm, ensure_ascii=False)}"}
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": f"Generate missions based on this data: {json.dumps(llm_data, ensure_ascii=False)}"}
             ],
             temperature=0.3
         )
         
-        wynik_json = json.loads(response.choices[0].message.content)
-        return OdpowiedzRekomendacji(**wynik_json)
+        json_result = json.loads(response.choices[0].message.content)
+        return RecommendationResponse(**json_result)
         
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Błąd LLM: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"LLM Error: {str(e)}")
 
-@app.post("/rekomenduj-misje", response_model=OdpowiedzRekomendacji)
-async def endpoint_rekomenduj_misje(payload: ZapotrzebowaniePayload):
-    if not payload.magazyny or not payload.punkty_odbioru:
-        raise HTTPException(status_code=400, detail="Brak danych wejściowych.")
-    return generuj_rekomendacje_llm(payload)
+@app.post("/recommend-missions", response_model=RecommendationResponse)
+async def recommend_missions_endpoint(payload: CrisisPayload):
+    """
+    Accepts the current state of warehouses and crisis map objects,
+    returns emergency missions generated by the LLM.
+    """
+    if not payload.warehouses or not payload.map_objects:
+        raise HTTPException(status_code=400, detail="Missing input data (warehouses or map objects).")
+    
+    return generate_llm_recommendations(payload)
