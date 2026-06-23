@@ -146,6 +146,21 @@ export type MissionAnimation = {
   vehicles: MissionVehicleTrack[];
 };
 
+// --- Crisis map ------------------------------------------------------------
+
+/** Lean crisis-map object returned by GET /crisis/ (summary + coordinates). */
+export type CrisisSummary = {
+  id: string;
+  object_type: string;
+  name: string;
+  city: string;
+  voivodeship: string;
+  severity: string;
+  status: string;
+  lat: number;
+  lng: number;
+};
+
 /** Full warehouse record returned by GET /warehouse/{id}/. */
 export type WarehouseDetail = {
   id: string;
