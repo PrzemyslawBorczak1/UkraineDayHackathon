@@ -29,7 +29,7 @@ from app.carrier_panel.schemas import (
 )
 
 # Statuses where acceptance defaults to Accepted (mission already running/done)
-_RUNNING_STATUSES = {"ASSIGNED", "IN_TRANSIT", "INCIDENT", "REASSIGN", "DELIVERED", "CLOSED"}
+_RUNNING_STATUSES = {"IN_PROGRESS", "DONE"}
 
 # Default geometry — center of Poland — used for newly registered carriers
 _POLAND_CENTER = from_shape(Point(19.5, 52.0), srid=4326)

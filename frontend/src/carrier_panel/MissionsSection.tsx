@@ -6,25 +6,18 @@ import type { Mission, TaskSummary, Vehicle } from "./types";
 
 // Raw DB statuses → color
 const STATUS_COLOR: Record<string, string> = {
-  NEW:        "#94a3b8",
-  PENDING:    "#94a3b8",
-  FUNDED:     "#60a5fa",
-  QUEUED:     "#a78bfa",
-  DEFERRED:   "#f87171",
-  ASSIGNED:   "#f59e0b",
-  IN_TRANSIT: "#22c55e",
-  INCIDENT:   "#ef4444",
-  REASSIGN:   "#f97316",
-  DELIVERED:  "#10b981",
-  CLOSED:     "#6b7280",
+  NEW:         "#94a3b8",
+  ACCEPTED:    "#60a5fa",
+  IN_PROGRESS: "#22c55e",
+  DONE:        "#10b981",
 };
 
 // Grouping order for display
 const STATUS_GROUPS: { label: string; statuses: string[] }[] = [
-  { label: "In transit",  statuses: ["IN_TRANSIT", "INCIDENT", "REASSIGN"] },
-  { label: "Assigned",    statuses: ["ASSIGNED"] },
-  { label: "Upcoming",    statuses: ["FUNDED", "QUEUED", "NEW", "PENDING", "DEFERRED"] },
-  { label: "Completed",   statuses: ["DELIVERED", "CLOSED"] },
+  { label: "In progress", statuses: ["IN_PROGRESS"] },
+  { label: "Accepted",    statuses: ["ACCEPTED"] },
+  { label: "New",         statuses: ["NEW"] },
+  { label: "Completed",   statuses: ["DONE"] },
 ];
 
 const PRIORITY_TONE: Record<string, string> = {

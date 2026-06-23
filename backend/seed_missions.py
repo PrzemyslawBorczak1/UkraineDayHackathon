@@ -8,27 +8,19 @@ sys.path.insert(0, os.path.dirname(__file__))
 
 from datetime import datetime, timezone, timedelta
 from app.database import SessionLocal
-from app.models.mission import Mission
-from app.models.task import Task
+from app.models.mission import Mission, MissionStatus
+from app.models.task import Task, TaskStatus
 
 db = SessionLocal()
 
 NOW = datetime.now(timezone.utc)
 D = lambda days: NOW + timedelta(days=days)
 
-# WKT helpers (lon, lat)
 def pt(lon, lat):
     return f"SRID=4326;POINT({lon} {lat})"
 
-# (carrier_id, [vehicle_ids])
-CARRIERS = [
-    ("C001", ["V0001", "V0002", "V0589"]),
-    ("C002", ["V0009", "V0010", "V0011"]),
-    ("C003", ["V0016", "V0017", "V0018"]),
-]
-
 MISSIONS = [
-    # C001 — 3 missions in different statuses
+    # C001 — 3 missions
     dict(
         id="M9001",
         cargo_type="Food supplies",
@@ -40,7 +32,7 @@ MISSIONS = [
         priority="Critical",
         available_from=D(-2), deadline=D(1),
         estimated_cost=4200.0,
-        status="IN_TRANSIT",
+        status=MissionStatus.IN_PROGRESS,
         requesting_authority="UNHCR Poland",
         special_requirement=None,
         certificate_adr=False, liftgate=False,
@@ -58,7 +50,7 @@ MISSIONS = [
         priority="Critical",
         available_from=D(0), deadline=D(3),
         estimated_cost=9800.0,
-        status="ASSIGNED",
+        status=MissionStatus.ACCEPTED,
         requesting_authority="WHO Regional Office",
         special_requirement="Temperature-controlled transport required (2–8°C)",
         certificate_adr=False, liftgate=True,
@@ -76,7 +68,7 @@ MISSIONS = [
         priority="Normal",
         available_from=D(1), deadline=D(7),
         estimated_cost=7500.0,
-        status="FUNDED",
+        status=MissionStatus.NEW,
         requesting_authority="ICRC",
         special_requirement=None,
         certificate_adr=False, liftgate=False,
@@ -95,7 +87,7 @@ MISSIONS = [
         priority="High",
         available_from=D(-1), deadline=D(2),
         estimated_cost=14000.0,
-        status="IN_TRANSIT",
+        status=MissionStatus.IN_PROGRESS,
         requesting_authority="Polish Red Cross",
         special_requirement="ADR certificate required — class 6.2 biological substances",
         certificate_adr=True, liftgate=False,
@@ -113,7 +105,7 @@ MISSIONS = [
         priority="High",
         available_from=D(0), deadline=D(5),
         estimated_cost=16500.0,
-        status="ASSIGNED",
+        status=MissionStatus.ACCEPTED,
         requesting_authority="UNDP Ukraine",
         special_requirement="Liftgate required for unloading at destination",
         certificate_adr=False, liftgate=True,
@@ -131,7 +123,7 @@ MISSIONS = [
         priority="Critical",
         available_from=D(2), deadline=D(6),
         estimated_cost=11000.0,
-        status="QUEUED",
+        status=MissionStatus.NEW,
         requesting_authority="UNICEF",
         special_requirement=None,
         certificate_adr=False, liftgate=False,
@@ -150,7 +142,7 @@ MISSIONS = [
         priority="Critical",
         available_from=D(-3), deadline=D(0),
         estimated_cost=12500.0,
-        status="DELIVERED",
+        status=MissionStatus.DONE,
         requesting_authority="MSF Poland",
         special_requirement="Temperature-controlled (2–8°C) — COVID vaccines",
         certificate_adr=False, liftgate=False,
@@ -168,7 +160,7 @@ MISSIONS = [
         priority="High",
         available_from=D(-1), deadline=D(3),
         estimated_cost=10200.0,
-        status="IN_TRANSIT",
+        status=MissionStatus.IN_PROGRESS,
         requesting_authority="IOM Ukraine",
         special_requirement=None,
         certificate_adr=False, liftgate=False,
@@ -186,7 +178,7 @@ MISSIONS = [
         priority="Normal",
         available_from=D(3), deadline=D(10),
         estimated_cost=8800.0,
-        status="NEW",
+        status=MissionStatus.NEW,
         requesting_authority="UNHCR Ukraine",
         special_requirement=None,
         certificate_adr=False, liftgate=False,
@@ -195,27 +187,19 @@ MISSIONS = [
     ),
 ]
 
-# Tasks: link assigned missions to their vehicles
 TASKS = [
-    # M9001 — IN_TRANSIT, V0001 assigned
-    {"mission_id": "M9001", "vehicle_id": "V0001"},
-    # M9002 — ASSIGNED, V0002 assigned; second vehicle also helps
-    {"mission_id": "M9002", "vehicle_id": "V0002"},
-    {"mission_id": "M9002", "vehicle_id": "V0589"},
-    # M9004 — IN_TRANSIT, V0009
-    {"mission_id": "M9004", "vehicle_id": "V0009"},
-    # M9005 — ASSIGNED, V0010 + V0011
-    {"mission_id": "M9005", "vehicle_id": "V0010"},
-    {"mission_id": "M9005", "vehicle_id": "V0011"},
-    # M9007 — DELIVERED, V0016
-    {"mission_id": "M9007", "vehicle_id": "V0016"},
-    # M9008 — IN_TRANSIT, V0017 + V0018
-    {"mission_id": "M9008", "vehicle_id": "V0017"},
-    {"mission_id": "M9008", "vehicle_id": "V0018"},
+    {"mission_id": "M9001", "vehicle_id": "V0001", "status": TaskStatus.TRANSPORTING},
+    {"mission_id": "M9002", "vehicle_id": "V0002", "status": TaskStatus.TRAVELING},
+    {"mission_id": "M9002", "vehicle_id": "V0589", "status": TaskStatus.TRAVELING},
+    {"mission_id": "M9004", "vehicle_id": "V0009", "status": TaskStatus.TRANSPORTING},
+    {"mission_id": "M9005", "vehicle_id": "V0010", "status": TaskStatus.TRAVELING},
+    {"mission_id": "M9005", "vehicle_id": "V0011", "status": TaskStatus.WAIT},
+    {"mission_id": "M9007", "vehicle_id": "V0016", "status": TaskStatus.UNLOAD},
+    {"mission_id": "M9008", "vehicle_id": "V0017", "status": TaskStatus.TRANSPORTING},
+    {"mission_id": "M9008", "vehicle_id": "V0018", "status": TaskStatus.TRANSPORTING},
 ]
 
 try:
-    # Remove existing seed missions to allow re-running
     seed_ids = [m["id"] for m in MISSIONS]
     db.query(Task).filter(Task.mission_id.in_(seed_ids)).delete(synchronize_session=False)
     db.query(Mission).filter(Mission.id.in_(seed_ids)).delete(synchronize_session=False)
@@ -247,11 +231,11 @@ try:
         ))
 
     for t in TASKS:
-        db.add(Task(mission_id=t["mission_id"], vehicle_id=t["vehicle_id"]))
+        db.add(Task(mission_id=t["mission_id"], vehicle_id=t["vehicle_id"], status=t["status"]))
 
     db.commit()
     print(f"Seeded {len(MISSIONS)} missions and {len(TASKS)} tasks.")
-    for c_id, _ in CARRIERS:
+    for c_id in ["C001", "C002", "C003"]:
         count = sum(1 for m in MISSIONS if m["assigned_carrier_id"] == c_id)
         print(f"  {c_id}: {count} missions")
 
