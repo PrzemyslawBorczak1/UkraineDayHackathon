@@ -172,6 +172,61 @@ class MockApiService implements ApiService {
     print('│ Description: ${incident.description ?? '—'}');
     // ignore: avoid_print
     print('└──────────────────────────────────────────');
+
+    if (_tasks != null) {
+      if (incident.type == IncidentType.delay && incident.delayMinutes != null) {
+        final delayDuration = Duration(minutes: incident.delayMinutes!);
+        for (var i = 0; i < _tasks!.length; i++) {
+          final t = _tasks![i];
+          _tasks![i] = Task(
+            id: t.id,
+            missionId: t.missionId,
+            cargoType: t.cargoType,
+            startTime: t.startTime?.add(delayDuration),
+            endTime: t.endTime?.add(delayDuration),
+            origin: t.origin,
+            originAddress: t.originAddress,
+            originCoordinates: t.originCoordinates,
+            destination: t.destination,
+            destinationAddress: t.destinationAddress,
+            destinationCoordinates: t.destinationCoordinates,
+            weight: t.weight,
+            volume: t.volume,
+            specialRequirements: t.specialRequirements,
+            unloadingWaitMinutes: t.unloadingWaitMinutes,
+            isCurrent: t.isCurrent,
+          );
+        }
+      } else if (incident.type == IncidentType.endMission) {
+        final taskIndex = _tasks!.indexWhere((t) => t.id == incident.taskId);
+        if (taskIndex != -1) {
+          final mId = _tasks![taskIndex].missionId;
+          _tasks!.removeWhere((t) => t.missionId == mId);
+          if (_tasks!.isNotEmpty && !_tasks!.any((t) => t.isCurrent)) {
+            final nextTask = _tasks!.first;
+            _tasks![0] = Task(
+              id: nextTask.id,
+              missionId: nextTask.missionId,
+              cargoType: nextTask.cargoType,
+              startTime: nextTask.startTime,
+              endTime: nextTask.endTime,
+              origin: nextTask.origin,
+              originAddress: nextTask.originAddress,
+              originCoordinates: nextTask.originCoordinates,
+              destination: nextTask.destination,
+              destinationAddress: nextTask.destinationAddress,
+              destinationCoordinates: nextTask.destinationCoordinates,
+              weight: nextTask.weight,
+              volume: nextTask.volume,
+              specialRequirements: nextTask.specialRequirements,
+              unloadingWaitMinutes: nextTask.unloadingWaitMinutes,
+              isCurrent: true,
+            );
+          }
+        }
+      }
+    }
+
     return true;
   }
 }

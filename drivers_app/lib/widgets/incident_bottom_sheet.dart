@@ -35,10 +35,10 @@ class _IncidentBottomSheetState extends State<IncidentBottomSheet> {
     final incident = Incident(
       taskId: widget.currentTaskId,
       type: _selectedType!,
-      delayMinutes:
-          _selectedType == IncidentType.delay ? _delayMinutes : null,
-      description:
-          _descriptionCtrl.text.isNotEmpty ? _descriptionCtrl.text : null,
+      delayMinutes: _selectedType == IncidentType.delay ? _delayMinutes : null,
+      description: _descriptionCtrl.text.isNotEmpty
+          ? _descriptionCtrl.text
+          : null,
       reportedAt: DateTime.now(),
     );
 
@@ -56,7 +56,16 @@ class _IncidentBottomSheetState extends State<IncidentBottomSheet> {
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
         ),
       );
-      Navigator.of(context).pop();
+      Navigator.of(context).pop(true);
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: const Text('Failed to report incident'),
+          backgroundColor: Colors.red,
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
+        ),
+      );
     }
   }
 
@@ -110,8 +119,13 @@ class _IncidentBottomSheetState extends State<IncidentBottomSheet> {
             items: IncidentType.values.map((type) {
               return DropdownMenuItem(
                 value: type,
-                child: Text(type.label,
-                    style: const TextStyle(color: AppTheme.textHigh, fontSize: 15)),
+                child: Text(
+                  type.label,
+                  style: const TextStyle(
+                    color: AppTheme.textHigh,
+                    fontSize: 15,
+                  ),
+                ),
               );
             }).toList(),
             onChanged: (value) => setState(() => _selectedType = value),
@@ -129,8 +143,13 @@ class _IncidentBottomSheetState extends State<IncidentBottomSheet> {
                     : '$m min';
                 return DropdownMenuItem(
                   value: m,
-                  child: Text(label.trim(),
-                      style: const TextStyle(color: AppTheme.textHigh, fontSize: 15)),
+                  child: Text(
+                    label.trim(),
+                    style: const TextStyle(
+                      color: AppTheme.textHigh,
+                      fontSize: 15,
+                    ),
+                  ),
                 );
               }).toList(),
               onChanged: (value) => setState(() => _delayMinutes = value),
@@ -154,8 +173,9 @@ class _IncidentBottomSheetState extends State<IncidentBottomSheet> {
             children: [
               Expanded(
                 child: TextButton(
-                  onPressed:
-                      _isSending ? null : () => Navigator.of(context).pop(),
+                  onPressed: _isSending
+                      ? null
+                      : () => Navigator.of(context).pop(),
                   child: const Text('Cancel'),
                 ),
               ),
@@ -163,8 +183,9 @@ class _IncidentBottomSheetState extends State<IncidentBottomSheet> {
               Expanded(
                 flex: 2,
                 child: ElevatedButton(
-                  onPressed:
-                      _selectedType == null || _isSending ? null : _submit,
+                  onPressed: _selectedType == null || _isSending
+                      ? null
+                      : _submit,
                   style: ElevatedButton.styleFrom(
                     backgroundColor: AppTheme.caution,
                     foregroundColor: AppTheme.background,

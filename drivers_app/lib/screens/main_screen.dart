@@ -38,8 +38,8 @@ class _MainScreenState extends State<MainScreen> {
     });
   }
 
-  void _openIncidentSheet(int taskId) {
-    showModalBottomSheet(
+  Future<void> _openIncidentSheet(int taskId) async {
+    final result = await showModalBottomSheet<bool>(
       context: context,
       isScrollControlled: true,
       backgroundColor: AppTheme.surface,
@@ -52,6 +52,10 @@ class _MainScreenState extends State<MainScreen> {
         currentTaskId: taskId,
       ),
     );
+
+    if (result == true) {
+      _refresh();
+    }
   }
 
   void _showWarehousePopup(String name) {
